@@ -11,7 +11,7 @@
 
 
 // ============================================================
-// FILE NAME
+// FILE NAMES
 // ============================================================
 
 std::string normalizeRouteFilename(
@@ -34,6 +34,41 @@ std::string normalizeRouteFilename(
     }
 
     return {};
+}
+
+
+std::string normalizeObjFilename(
+    const std::string& filename)
+{
+    if (filename.empty())
+        return {};
+
+    std::filesystem::path path(filename);
+
+    if (!path.has_extension())
+    {
+        path += ".obj";
+        return path.string();
+    }
+
+    if (path.extension() == ".obj")
+    {
+        return path.string();
+    }
+
+    return {};
+}
+
+
+std::string defaultObjFilename(
+    const std::string& routeFilename)
+{
+    std::filesystem::path path(
+        routeFilename);
+
+    path.replace_extension(".obj");
+
+    return path.string();
 }
 
 
@@ -310,28 +345,28 @@ bool createNewRoute(
 // JSON LOAD
 // ============================================================
 
-bool openRouteFile(
-    const std::string& inputFilename)
+bool loadRouteModel(
+    const std::string& inputFilename,
+    RouteModel& model,
+    std::string& normalizedFilename)
 {
-    const std::string filename =
+    normalizedFilename =
         normalizeRouteFilename(
             inputFilename);
 
-    if (filename.empty())
+    if (normalizedFilename.empty())
     {
         std::cerr
-            << "Unsupported file extension.\n"
+            << "Unsupported route file extension.\n"
             << "Only .json is supported.\n";
 
         return false;
     }
 
-    RouteModel model;
-
     std::string error;
 
     if (!loadRoute(
-            filename,
+            normalizedFilename,
             model,
             error))
     {
@@ -345,12 +380,31 @@ bool openRouteFile(
 
     std::cout
         << "Loaded: "
-        << filename
+        << normalizedFilename
         << "\n\n";
+
+    return true;
+}
+
+
+bool openRouteFile(
+    const std::string& inputFilename)
+{
+    RouteModel model;
+
+    std::string filename;
+
+    if (!loadRouteModel(
+            inputFilename,
+            model,
+            filename))
+    {
+        return false;
+    }
 
     // Zadny Router.
     // Zadny findPath().
-    // Jen zobrazime ulozeny model.
+    // Pouze zobrazime ulozeny model.
 
     showModel(model);
 
@@ -411,17 +465,18 @@ void saveModelInteractive(
 
 
 // ============================================================
-// QUICK BLENDER TEST
+// OBJ EXPORT
 // ============================================================
 
-void exportBlenderTest(
-    const RouteModel& model)
+bool exportModelObj(
+    const RouteModel& model,
+    const std::string& filename)
 {
     std::string error;
 
     if (!exportObj(
             model,
-            "route.obj",
+            filename,
             error))
     {
         std::cerr
@@ -429,13 +484,15 @@ void exportBlenderTest(
             << error
             << '\n';
 
-        return;
+        return false;
     }
 
     std::cout
-        << "\nBlender export created:\n"
-        << "  route.obj\n"
-        << "  route.mtl\n";
+        << "\nOBJ exported: "
+        << filename
+        << '\n';
+
+    return true;
 }
 
 
@@ -450,20 +507,209 @@ void printHelp()
 
         << "Usage:\n\n"
 
-        << "  router12.exe\n"
+        << "  router13.exe\n"
         << "      Interactive menu.\n\n"
 
-        << "  router12.exe route\n"
+        << "  router13.exe route\n"
         << "      Opens route.json without rerouting.\n\n"
 
-        << "  router12.exe route.json\n"
+        << "  router13.exe route.json\n"
         << "      Opens route.json without rerouting.\n\n"
 
-        << "  router12.exe -route\n"
-        << "      Same as route.json.\n\n"
+        << "  router13.exe route --obj\n"
+        << "      Opens route.json and exports route.obj.\n\n"
 
-        << "  router12.exe --open route.json\n"
-        << "      Opens route.json.\n";
+        << "  router13.exe route --obj cpu.obj\n"
+        << "      Opens route.json and exports cpu.obj.\n\n"
+
+        << "  router13.exe --open route\n"
+        << "      Opens route.json without rerouting.\n\n"
+
+        << "  router13.exe --open route --obj\n"
+        << "      Opens route.json and exports route.obj.\n";
+}
+
+
+// ============================================================
+// COMMAND LINE
+// ============================================================
+
+int runCommandLine(
+    int argc,
+    char* argv[])
+{
+    std::string routeArgument;
+
+    int argumentIndex = 1;
+
+    const std::string firstArgument =
+        argv[1];
+
+    // --------------------------------------------------------
+    // HELP
+    // --------------------------------------------------------
+
+    if (firstArgument == "--help" ||
+        firstArgument == "-h")
+    {
+        printHelp();
+
+        return 0;
+    }
+
+    // --------------------------------------------------------
+    // --open route
+    // --------------------------------------------------------
+
+    if (firstArgument == "--open" ||
+        firstArgument == "-o")
+    {
+        if (argc < 3)
+        {
+            std::cerr
+                << "Missing route filename.\n";
+
+            return 1;
+        }
+
+        routeArgument =
+            argv[2];
+
+        argumentIndex = 3;
+    }
+
+    // --------------------------------------------------------
+    // route
+    // --------------------------------------------------------
+
+    else
+    {
+        routeArgument =
+            firstArgument;
+
+        argumentIndex = 2;
+
+        // Compatibility:
+        //
+        // router13.exe -route
+
+        if (routeArgument.size() > 1 &&
+            routeArgument.front() == '-')
+        {
+            routeArgument.erase(
+                routeArgument.begin());
+        }
+    }
+
+    // --------------------------------------------------------
+    // LOAD MODEL
+    // --------------------------------------------------------
+
+    RouteModel model;
+
+    std::string routeFilename;
+
+    if (!loadRouteModel(
+            routeArgument,
+            model,
+            routeFilename))
+    {
+        return 1;
+    }
+
+    // Zobrazime presne to,
+    // co je ulozeno v JSON.
+    //
+    // Nic se znovu neroutuje.
+
+    showModel(model);
+
+    // --------------------------------------------------------
+    // OPTIONAL ARGUMENTS
+    // --------------------------------------------------------
+
+    bool objRequested = false;
+
+    std::string objFilename;
+
+    while (argumentIndex < argc)
+    {
+        const std::string argument =
+            argv[argumentIndex];
+
+        if (argument == "--obj")
+        {
+            objRequested = true;
+
+            ++argumentIndex;
+
+            // Volitelny vystupni filename.
+            //
+            // --obj cpu.obj
+
+            if (argumentIndex < argc)
+            {
+                const std::string candidate =
+                    argv[argumentIndex];
+
+                if (!candidate.empty() &&
+                    candidate.front() != '-')
+                {
+                    objFilename =
+                        candidate;
+
+                    ++argumentIndex;
+                }
+            }
+
+            continue;
+        }
+
+        std::cerr
+            << "Unknown argument: "
+            << argument
+            << '\n';
+
+        return 1;
+    }
+
+    // --------------------------------------------------------
+    // OBJ EXPORT
+    // --------------------------------------------------------
+
+    if (objRequested)
+    {
+        if (objFilename.empty())
+        {
+            objFilename =
+                defaultObjFilename(
+                    routeFilename);
+        }
+        else
+        {
+            objFilename =
+                normalizeObjFilename(
+                    objFilename);
+
+            if (objFilename.empty())
+            {
+                std::cerr
+                    << "Unsupported OBJ filename.\n"
+                    << "Only .obj is supported.\n";
+
+                return 1;
+            }
+        }
+
+        if (!exportModelObj(
+                model,
+                objFilename))
+        {
+            return 1;
+        }
+    }
+
+    return 0;
 }
 
 
@@ -481,51 +727,9 @@ int main(
 
     if (argc > 1)
     {
-        std::string argument =
-            argv[1];
-
-        if (argument == "--help" ||
-            argument == "-h")
-        {
-            printHelp();
-
-            return 0;
-        }
-
-        if (argument == "--open" ||
-            argument == "-o")
-        {
-            if (argc < 3)
-            {
-                std::cerr
-                    << "Missing filename.\n";
-
-                return 1;
-            }
-
-            return
-                openRouteFile(
-                    argv[2])
-                ? 0
-                : 1;
-        }
-
-        // Podpora:
-        //
-        // router12.exe -route
-
-        if (argument.size() > 1 &&
-            argument.front() == '-')
-        {
-            argument.erase(
-                argument.begin());
-        }
-
-        return
-            openRouteFile(
-                argument)
-            ? 0
-            : 1;
+        return runCommandLine(
+            argc,
+            argv);
     }
 
     // ========================================================
@@ -571,16 +775,11 @@ int main(
 
             showModel(model);
 
-            // ================================================
-            // QUICK TEST:
-            // AUTOMATICKY VYROB OBJ + MTL PRO BLENDER
-            // ================================================
-
-            exportBlenderTest(model);
-
-            // ------------------------------------------------
-            // JSON SAVE
-            // ------------------------------------------------
+            // OBJ se zde uz automaticky NEEXPORTUJE.
+            //
+            // Export je samostatna CLI operace:
+            //
+            // router13.exe route --obj
 
             std::cout
                 << "\nSave route? [Y/n]: ";
