@@ -1,0 +1,137 @@
+{
+    "format": "ManhattanRouter",
+    "grid": {
+        "height": 10,
+        "layers": 2,
+        "width": 14
+    },
+    "version": 1,
+    "wires": [
+        {
+            "factorioWire": "RW",
+            "name": "A",
+            "netName": "VDD",
+            "netType": "VDD",
+            "path": {
+                "layerChanges": 0,
+                "points": [
+                    [
+                        2,
+                        4,
+                        0
+                    ],
+                    [
+                        3,
+                        4,
+                        0
+                    ],
+                    [
+                        4,
+                        4,
+                        0
+                    ],
+                    [
+                        5,
+                        4,
+                        0
+                    ],
+                    [
+                        6,
+                        4,
+                        0
+                    ],
+                    [
+                        7,
+                        4,
+                        0
+                    ],
+                    [
+                        8,
+                        4,
+                        0
+                    ],
+                    [
+                        9,
+                        4,
+                        0
+                    ],
+                    [
+                        10,
+                        4,
+                        0
+                    ],
+                    [
+                        11,
+                        4,
+                        0
+                    ]
+                ],
+                "totalCost": 9,
+                "turns": 0
+            }
+        },
+        {
+            "factorioWire": "GW",
+            "name": "B",
+            "netName": "VSS",
+            "netType": "VSS",
+            "path": {
+                "layerChanges": 2,
+                "points": [
+                    [
+                        6,
+                        1,
+                        0
+                    ],
+                    [
+                        6,
+                        2,
+                        0
+                    ],
+                    [
+                        6,
+                        3,
+                        0
+                    ],
+                    [
+                        6,
+                        3,
+                        1
+                    ],
+                    [
+                        6,
+                        4,
+                        1
+                    ],
+                    [
+                        6,
+                        5,
+                        1
+                    ],
+                    [
+                        6,
+                        5,
+                        0
+                    ],
+                    [
+                        6,
+                        6,
+                        0
+                    ],
+                    [
+                        6,
+                        7,
+                        0
+                    ],
+                    [
+                        6,
+                        8,
+                        0
+                    ]
+                ],
+                "totalCost": 15,
+                "turns": 0
+            }
+        }
+    ]
+}

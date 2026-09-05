@@ -1,0 +1,13 @@
+build/
+*.exe
+*.o
+
+# Blender / exporty
+*.obj
+*.mtl
+*.blend1
+
+# Dočasné soubory
+test.txt
+.vscode/
+.DS_Store
