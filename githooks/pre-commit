@@ -1,0 +1,99 @@
+#!/bin/sh
+
+echo
+echo "========================================"
+echo " CPU Router - pre-commit checks"
+echo "========================================"
+echo
+
+echo "[1/2] Checking staged whitespace..."
+
+if ! git diff --cached --check
+then
+    echo
+    echo "PRE-COMMIT FAILED"
+    echo "Staged files contain whitespace errors."
+    echo
+    echo "Fix the files, review them, stage them again,"
+    echo "and retry the commit."
+    echo
+    exit 1
+fi
+
+echo "PASS"
+echo
+
+echo "[2/2] Checking final newline..."
+
+failed=0
+file_list=$(mktemp)
+
+if [ -z "$file_list" ]
+then
+    echo "PRE-COMMIT FAILED"
+    echo "Could not create temporary file."
+    exit 1
+fi
+
+git diff --cached --name-only --diff-filter=ACMR > "$file_list"
+
+while IFS= read -r file
+do
+    case "$file" in
+        *.cpp|*.hpp|*.h|*.c|*.json|*.md|*.py|*.sh|*.cmd|*.bat|.editorconfig|.gitattributes|githooks/*)
+
+            staged_size=$(
+                git cat-file -s ":$file" 2>/dev/null
+            )
+
+            if [ -z "$staged_size" ]
+            then
+                echo "FAIL: cannot read staged file: $file"
+                failed=1
+                continue
+            fi
+
+            if [ "$staged_size" -eq 0 ]
+            then
+                continue
+            fi
+
+            last_byte=$(
+                git show ":$file" |
+                tail -c 1 |
+                od -An -t x1 |
+                tr -d ' \n'
+            )
+
+            if [ "$last_byte" != "0a" ]
+            then
+                echo "FAIL: $file has no final newline."
+                failed=1
+            fi
+            ;;
+    esac
+done < "$file_list"
+
+rm -f "$file_list"
+
+if [ "$failed" -ne 0 ]
+then
+    echo
+    echo "PRE-COMMIT FAILED"
+    echo "One or more staged files have no final newline."
+    echo
+    echo "Fix/save the files, review them, stage them again,"
+    echo "and retry the commit."
+    echo
+    exit 1
+fi
+
+echo "PASS"
+echo
+
+echo "========================================"
+echo " PRE-COMMIT CHECKS PASSED"
+echo "========================================"
+echo
+
+exit 0
