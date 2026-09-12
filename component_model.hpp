@@ -1,7 +1,7 @@
 #pragma once
 
+#include "geometry.hpp"
 #include "net_id.hpp"
-#include "router.hpp"
 
 #include <string>
 #include <vector>

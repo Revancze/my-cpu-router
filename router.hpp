@@ -1,22 +1,11 @@
 #pragma once
 
+#include "geometry.hpp"
 #include "net_id.hpp"
 
 #include <optional>
 #include <vector>
 
-struct Point
-{
-    int x{};
-    int y{};
-    int z{};
-
-    bool operator==(
-        const Point& other) const
-    {
-        return x == other.x && y == other.y && z == other.z;
-    }
-};
 
 struct Path
 {

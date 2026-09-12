@@ -1,5 +1,6 @@
 #pragma once
 
+#include "geometry.hpp"
 #include "component_model.hpp"
 
 #include <string>
