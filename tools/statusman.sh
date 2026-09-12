@@ -25,53 +25,9 @@ fi
 # shellcheck source=tools/lib/console.sh
 . "$CONSOLE_SH"
 
-status_warn()
-{
-    printf '%b[WARN]%b %s\n' \
-        "$UI_YELLOW" \
-        "$UI_RESET" \
-        "$1"
-}
-
-render_change_stream()
-{
-    while IFS= read -r line
-    do
-        case "$line" in
-            A*)
-                printf '%b  %s%b\n' \
-                    "$UI_GREEN" \
-                    "$line" \
-                    "$UI_RESET"
-                ;;
-
-            D*|U*)
-                printf '%b  %s%b\n' \
-                    "$UI_RED" \
-                    "$line" \
-                    "$UI_RESET"
-                ;;
-
-            M*|R*|C*|T*)
-                printf '%b  %s%b\n' \
-                    "$UI_YELLOW" \
-                    "$line" \
-                    "$UI_RESET"
-                ;;
-
-            \?\?*)
-                printf '%b  %s%b\n' \
-                    "$UI_CYAN" \
-                    "$line" \
-                    "$UI_RESET"
-                ;;
-
-            *)
-                printf '  %s\n' "$line"
-                ;;
-        esac
-    done
-}
+# ============================================================
+# HELPERS
+# ============================================================
 
 is_line_range()
 {
@@ -97,11 +53,9 @@ resolve_range()
         -*)
             RANGE_END=${RANGE_VALUE#-}
             ;;
-
         *-)
             RANGE_START=${RANGE_VALUE%-}
             ;;
-
         *-*)
             RANGE_START=${RANGE_VALUE%-*}
             RANGE_END=${RANGE_VALUE#*-}
@@ -120,27 +74,26 @@ resolve_range()
             ;;
     esac
 
-   if [ "$RANGE_START" -lt 1 ] ||
-   [ "$RANGE_END" -lt 1 ]
-then
-    return 1
-fi
+    if [ "$RANGE_START" -lt 1 ] ||
+       [ "$RANGE_END" -lt 1 ]
+    then
+        return 1
+    fi
 
-case "$RANGE_VALUE" in
-    *-)
-        if [ "$RANGE_START" -gt "$FILE_LINES" ]
-        then
-            return 0
-        fi
-        ;;
-
-    *)
-        if [ "$RANGE_START" -gt "$RANGE_END" ]
-        then
-            return 1
-        fi
-        ;;
-esac
+    case "$RANGE_VALUE" in
+        *-)
+            if [ "$RANGE_START" -gt "$FILE_LINES" ]
+            then
+                return 0
+            fi
+            ;;
+        *)
+            if [ "$RANGE_START" -gt "$RANGE_END" ]
+            then
+                return 1
+            fi
+            ;;
+    esac
 
     if [ "$RANGE_END" -gt "$FILE_LINES" ]
     then
@@ -150,90 +103,16 @@ esac
     return 0
 }
 
-render_file()
+queue_warning()
 {
-    FILE=$1
-    REQUESTED_RANGE=$2
-
-    if [ ! -f "$FILE" ]
-    then
-        status_warn "File does not exist: $FILE"
-        return
-    fi
-
-    FILE_LINES=$(
-        awk 'END {
-            print NR + 0
-        }' "$FILE"
-    )
-
-    RANGE_START=1
-    RANGE_END=$FILE_LINES
-
-    if [ -n "$REQUESTED_RANGE" ]
-    then
-        if ! resolve_range \
-            "$REQUESTED_RANGE" \
-            "$FILE_LINES"
-        then
-            status_warn \
-                "Invalid line range '$REQUESTED_RANGE' for $FILE"
-            return
-        fi
-    fi
-
-    printf '\n'
-    ui_section "FILE :: $FILE"
-
-    printf '  lines ........................ %s\n' "$FILE_LINES"
-
-    if [ -n "$REQUESTED_RANGE" ]
-    then
-        printf '  requested range .............. %s\n' \
-            "$REQUESTED_RANGE"
-    else
-        printf '  requested range .............. all\n'
-    fi
-
-    if [ "$FILE_LINES" -eq 0 ]
-    then
-        ui_info "File is empty."
-        return
-    fi
-
-    if [ "$RANGE_START" -gt "$FILE_LINES" ]
-    then
-        status_warn \
-            "Range starts after end of file ($FILE_LINES lines)."
-        return
-    fi
-
-    printf '  displayed range .............. %s-%s\n' \
-        "$RANGE_START" \
-        "$RANGE_END"
-
-    printf '\n'
-
-    awk \
-        -v start="$RANGE_START" \
-        -v end="$RANGE_END" \
-        '
-        NR >= start && NR <= end {
-            printf "%6d | %s\n", NR, $0
-        }
-        ' \
-        "$FILE"
+    printf '%s\n' "$1" >> "$WARNINGS_FILE"
 }
 
 add_inspection_file()
 {
     FILE=$1
 
-    if grep \
-        -Fqx \
-        "$FILE" \
-        "$INSPECTION_FILES" \
-        2>/dev/null
+    if grep -Fqx "$FILE" "$INSPECTION_FILES" 2>/dev/null
     then
         return
     fi
@@ -264,14 +143,177 @@ resolve_file_argument()
 
     if [ "$MATCHED" -eq 0 ]
     then
-        status_warn "No file matches: $ARG"
+        queue_warning "No file matches: $ARG"
     fi
 }
 
-ui_banner \
-    "STATUSMAN :: PROJECT STATUS" \
-    "$UI_MAGENTA" \
-    "$UI_CYAN"
+render_name_status()
+{
+    MODE=$1
+
+    if [ "$MODE" = "staged" ]
+    then
+        git diff --cached --name-status
+    else
+        git diff --name-status
+    fi |
+    while IFS="$(printf '\t')" read -r KIND FILE REST
+    do
+        case "$KIND" in
+            A)
+                ui_change add "$FILE  [$MODE]"
+                ;;
+            D)
+                ui_change delete "$FILE  [$MODE]"
+                ;;
+            M|R*|C*|T)
+                ui_change modify "$FILE  [$MODE]"
+                ;;
+            U*)
+                ui_warn "$FILE  [conflict]"
+                ;;
+            *)
+                printf '  %s\t%s\n' "$KIND" "$FILE"
+                ;;
+        esac
+    done
+}
+
+render_untracked()
+{
+    git ls-files --others --exclude-standard |
+    while IFS= read -r FILE
+    do
+        printf '%b?%b %s  %b[untracked]%b\n' \
+            "$UI_CYAN" \
+            "$UI_RESET" \
+            "$FILE" \
+            "$UI_DIM" \
+            "$UI_RESET"
+    done
+}
+
+render_conflicts()
+{
+    git diff --name-only --diff-filter=U |
+    while IFS= read -r FILE
+    do
+        ui_warn "$FILE  [conflict]"
+    done
+}
+
+render_diff_summary()
+{
+    MODE=$1
+
+    if [ "$MODE" = "staged" ]
+    then
+        if git diff --cached --check >/dev/null 2>&1
+        then
+            CHECK_TEXT="whitespace ✓"
+            CHECK_COLOR=$UI_GREEN
+        else
+            CHECK_TEXT="whitespace !"
+            CHECK_COLOR=$UI_YELLOW
+        fi
+
+        STAT_TEXT=$(
+            git diff --cached --stat |
+            tail -n 1
+        )
+    else
+        if git diff --check >/dev/null 2>&1
+        then
+            CHECK_TEXT="whitespace ✓"
+            CHECK_COLOR=$UI_GREEN
+        else
+            CHECK_TEXT="whitespace !"
+            CHECK_COLOR=$UI_YELLOW
+        fi
+
+        STAT_TEXT=$(
+            git diff --stat |
+            tail -n 1
+        )
+    fi
+
+    if [ -z "$STAT_TEXT" ]
+    then
+        STAT_TEXT="no diff statistics"
+    fi
+
+    printf '  %-9s  %b%-14s%b  %s\n' \
+        "$MODE" \
+        "$CHECK_COLOR" \
+        "$CHECK_TEXT" \
+        "$UI_RESET" \
+        "$STAT_TEXT"
+}
+
+render_file()
+{
+    FILE=$1
+    REQUESTED_RANGE=$2
+
+    if [ ! -f "$FILE" ]
+    then
+        ui_warn "File does not exist: $FILE"
+        return
+    fi
+
+    FILE_LINES=$(
+        awk 'END { print NR + 0 }' "$FILE"
+    )
+
+    RANGE_START=1
+    RANGE_END=$FILE_LINES
+
+    if [ -n "$REQUESTED_RANGE" ]
+    then
+        if ! resolve_range "$REQUESTED_RANGE" "$FILE_LINES"
+        then
+            ui_warn "Invalid line range '$REQUESTED_RANGE' for $FILE"
+            return
+        fi
+    fi
+
+    if [ "$FILE_LINES" -eq 0 ]
+    then
+        printf '\n'
+        ui_section "$FILE"
+        ui_muted "empty file"
+        return
+    fi
+
+    if [ "$RANGE_START" -gt "$FILE_LINES" ]
+    then
+        printf '\n'
+        ui_section "$FILE"
+        ui_warn "Range starts after end of file ($FILE_LINES lines)."
+        return
+    fi
+
+    printf '\n'
+
+    if [ -n "$REQUESTED_RANGE" ]
+    then
+        ui_section "$FILE · lines $RANGE_START-$RANGE_END"
+    else
+        ui_section "$FILE · lines 1-$FILE_LINES"
+    fi
+
+    awk \
+        -v start="$RANGE_START" \
+        -v end="$RANGE_END" \
+        -v dim="$UI_DIM" \
+        -v reset="$UI_RESET" \
+        '
+        NR >= start && NR <= end {
+            printf "%s%6d%s │ %s\n", dim, NR, reset, $0
+        }
+        ' \
+        "$FILE"
+}
 
 # ============================================================
 # ENVIRONMENT
@@ -279,39 +321,41 @@ ui_banner \
 
 if ! command -v git >/dev/null 2>&1
 then
-    ui_fail "Git was not found in PATH."
+    printf 'STATUSMAN ERROR: Git was not found in PATH.\n'
     exit 1
 fi
 
-if ! git rev-parse \
-    --is-inside-work-tree \
-    >/dev/null 2>&1
+if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1
 then
-    ui_fail "Not inside a Git repository."
+    printf 'STATUSMAN ERROR: not inside a Git repository.\n'
     exit 1
 fi
 
 # ============================================================
-# STATUS SNAPSHOT
+# TEMPORARY SNAPSHOT FILES
 # ============================================================
 
 STATUS_FILE=$(mktemp 2>/dev/null)
 AVAILABLE_FILES=$(mktemp 2>/dev/null)
 INSPECTION_FILES=$(mktemp 2>/dev/null)
+WARNINGS_FILE=$(mktemp 2>/dev/null)
 
 if [ -z "$STATUS_FILE" ] ||
    [ ! -f "$STATUS_FILE" ] ||
    [ -z "$AVAILABLE_FILES" ] ||
    [ ! -f "$AVAILABLE_FILES" ] ||
    [ -z "$INSPECTION_FILES" ] ||
-   [ ! -f "$INSPECTION_FILES" ]
+   [ ! -f "$INSPECTION_FILES" ] ||
+   [ -z "$WARNINGS_FILE" ] ||
+   [ ! -f "$WARNINGS_FILE" ]
 then
-    ui_fail "Could not create temporary Statusman files."
+    printf 'STATUSMAN ERROR: could not create temporary files.\n'
 
     rm -f \
         "$STATUS_FILE" \
         "$AVAILABLE_FILES" \
-        "$INSPECTION_FILES"
+        "$INSPECTION_FILES" \
+        "$WARNINGS_FILE"
 
     exit 1
 fi
@@ -321,7 +365,8 @@ cleanup()
     rm -f \
         "$STATUS_FILE" \
         "$AVAILABLE_FILES" \
-        "$INSPECTION_FILES"
+        "$INSPECTION_FILES" \
+        "$WARNINGS_FILE"
 }
 
 trap cleanup 0
@@ -332,7 +377,7 @@ if ! git status \
     --untracked-files=all \
     > "$STATUS_FILE"
 then
-    ui_fail "Could not inspect repository status."
+    printf 'STATUSMAN ERROR: could not inspect repository status.\n'
     exit 1
 fi
 
@@ -342,7 +387,12 @@ git ls-files \
     --exclude-standard \
     > "$AVAILABLE_FILES"
 
-    REQUESTED_RANGE=""
+# ============================================================
+# CLI ARGUMENTS
+# ============================================================
+
+REQUESTED_RANGE=""
+FILE_ARGUMENT_COUNT=0
 
 if [ "$#" -gt 0 ]
 then
@@ -361,8 +411,6 @@ then
         if [ "$ARGUMENT_COUNT" -gt 1 ]
         then
             FILE_ARGUMENT_COUNT=$((ARGUMENT_COUNT - 1))
-        else
-            FILE_ARGUMENT_COUNT=0
         fi
     else
         FILE_ARGUMENT_COUNT=$#
@@ -384,50 +432,30 @@ then
 fi
 
 # ============================================================
-# REPOSITORY NAME
+# REPOSITORY METADATA
 # ============================================================
 
-REMOTE_URL=$(
-    git remote get-url origin 2>/dev/null || true
-)
+REMOTE_URL=$(git remote get-url origin 2>/dev/null || true)
 
 if [ -n "$REMOTE_URL" ]
 then
     REPOSITORY_NAME=${REMOTE_URL##*/}
     REPOSITORY_NAME=${REPOSITORY_NAME%.git}
 else
-    REPOSITORY_NAME=$(
-        basename "$ROOT_DIR"
-    )
+    REPOSITORY_NAME=$(basename "$ROOT_DIR")
 fi
 
-# ============================================================
-# BRANCH METADATA
-# ============================================================
+BRANCH=$(sed -n 's/^# branch.head //p' "$STATUS_FILE")
+HEAD_OID=$(sed -n 's/^# branch.oid //p' "$STATUS_FILE")
+UPSTREAM=$(sed -n 's/^# branch.upstream //p' "$STATUS_FILE")
+AB=$(sed -n 's/^# branch.ab //p' "$STATUS_FILE")
 
-BRANCH=$(
-    sed -n \
-        's/^# branch.head //p' \
-        "$STATUS_FILE"
-)
+SHORT_OID="unknown"
 
-HEAD_OID=$(
-    sed -n \
-        's/^# branch.oid //p' \
-        "$STATUS_FILE"
-)
-
-UPSTREAM=$(
-    sed -n \
-        's/^# branch.upstream //p' \
-        "$STATUS_FILE"
-)
-
-AB=$(
-    sed -n \
-        's/^# branch.ab //p' \
-        "$STATUS_FILE"
-)
+if [ -n "$HEAD_OID" ]
+then
+    SHORT_OID=$(printf '%s\n' "$HEAD_OID" | cut -c 1-7)
+fi
 
 AHEAD=0
 BEHIND=0
@@ -436,26 +464,14 @@ if [ -n "$AB" ]
 then
     AHEAD=$(
         printf '%s\n' "$AB" |
-        awk '{
-            value = $1
-            sub(/^\+/, "", value)
-            print value + 0
-        }'
+        awk '{ value = $1; sub(/^\+/, "", value); print value + 0 }'
     )
 
     BEHIND=$(
         printf '%s\n' "$AB" |
-        awk '{
-            value = $2
-            sub(/^-/, "", value)
-            print value + 0
-        }'
+        awk '{ value = $2; sub(/^-/, "", value); print value + 0 }'
     )
 fi
-
-# ============================================================
-# WORKTREE COUNTS
-# ============================================================
 
 STAGED=$(
     awk '
@@ -463,10 +479,7 @@ STAGED=$(
         if (substr($2, 1, 1) != ".")
             count++
     }
-
-    END {
-        print count + 0
-    }
+    END { print count + 0 }
     ' "$STATUS_FILE"
 )
 
@@ -476,258 +489,32 @@ UNSTAGED=$(
         if (substr($2, 2, 1) != ".")
             count++
     }
-
-    END {
-        print count + 0
-    }
+    END { print count + 0 }
     ' "$STATUS_FILE"
 )
 
 UNTRACKED=$(
     awk '
-    /^\? / {
-        count++
-    }
-
-    END {
-        print count + 0
-    }
+    /^\? / { count++ }
+    END { print count + 0 }
     ' "$STATUS_FILE"
 )
 
 CONFLICTS=$(
     awk '
-    /^u / {
-        count++
-    }
-
-    END {
-        print count + 0
-    }
+    /^u / { count++ }
+    END { print count + 0 }
     ' "$STATUS_FILE"
 )
 
 STASHES=$(
     git stash list |
-    awk 'END {
-        print NR + 0
-    }'
+    awk 'END { print NR + 0 }'
 )
-
-# ============================================================
-# REPOSITORY DASHBOARD
-# ============================================================
-
-printf '\n'
-ui_section "REPOSITORY"
-
-ui_info "Repository: $REPOSITORY_NAME"
-
-if [ -n "$BRANCH" ] &&
-   [ "$BRANCH" != "(detached)" ]
-then
-    ui_info "Branch: $BRANCH"
-else
-    status_warn "Detached HEAD."
-fi
-
-if [ -n "$HEAD_OID" ]
-then
-    SHORT_OID=$(
-        printf '%s\n' "$HEAD_OID" |
-        cut -c 1-7
-    )
-
-    ui_info "HEAD: $SHORT_OID"
-fi
-
-if [ -n "$UPSTREAM" ]
-then
-    ui_info "Upstream: $UPSTREAM"
-
-    printf '  ahead ........................ %s\n' "$AHEAD"
-    printf '  behind ....................... %s\n' "$BEHIND"
-
-    if [ "$AHEAD" -eq 0 ] &&
-       [ "$BEHIND" -eq 0 ]
-    then
-        ui_ok "Branch synchronized with known upstream state."
-    elif [ "$BEHIND" -gt 0 ]
-    then
-        status_warn "Branch is behind upstream."
-    elif [ "$AHEAD" -gt 0 ]
-    then
-        ui_info "Branch contains local commits not in upstream."
-    fi
-else
-    ui_info "Upstream: none"
-    ui_info "Ahead/behind: not available."
-fi
-
-printf '  stashes ...................... %s\n' "$STASHES"
-
-# ============================================================
-# WORKTREE DASHBOARD
-# ============================================================
-
-printf '\n'
-ui_section "WORKTREE"
-
-printf '  staged ....................... %s\n' "$STAGED"
-printf '  unstaged ..................... %s\n' "$UNSTAGED"
-printf '  untracked .................... %s\n' "$UNTRACKED"
-printf '  conflicts .................... %s\n' "$CONFLICTS"
-
-if [ "$STAGED" -eq 0 ] &&
-   [ "$UNSTAGED" -eq 0 ] &&
-   [ "$UNTRACKED" -eq 0 ] &&
-   [ "$CONFLICTS" -eq 0 ]
-then
-    printf '\n'
-    ui_ok "Working tree clean."
-else
-    printf '\n'
-
-    if [ "$CONFLICTS" -gt 0 ]
-    then
-        status_warn "Repository contains merge conflicts."
-    else
-        ui_info "Repository contains local changes."
-    fi
-fi
-
-# ============================================================
-# CONFLICTS
-# ============================================================
-
-if [ "$CONFLICTS" -gt 0 ]
-then
-    printf '\n'
-    ui_section "CONFLICTS"
-
-    git diff \
-        --name-only \
-        --diff-filter=U |
-    sed 's/^/U\t/' |
-    render_change_stream
-fi
-
-# ============================================================
-# STAGED DIFF
-# ============================================================
-
-if [ "$STAGED" -gt 0 ]
-then
-    printf '\n'
-    ui_section "STAGED DIFF"
-
-    printf '%bCHECK%b\n' \
-        "${UI_BOLD}${UI_WHITE}" \
-        "$UI_RESET"
-
-    if git diff --cached --check
-    then
-        ui_ok "Staged diff whitespace clean."
-    else
-        status_warn "Staged diff contains whitespace errors."
-    fi
-
-    printf '\n'
-    printf '%bSTAT%b\n' \
-        "${UI_BOLD}${UI_WHITE}" \
-        "$UI_RESET"
-
-    git diff \
-        --cached \
-        --stat
-
-    printf '\n'
-    printf '%bNAME STATUS%b\n' \
-        "${UI_BOLD}${UI_WHITE}" \
-        "$UI_RESET"
-
-    git diff \
-        --cached \
-        --name-status |
-    render_change_stream
-fi
-
-# ============================================================
-# UNSTAGED DIFF
-# ============================================================
-
-if [ "$UNSTAGED" -gt 0 ]
-then
-    printf '\n'
-    ui_section "UNSTAGED DIFF"
-
-    printf '%bCHECK%b\n' \
-        "${UI_BOLD}${UI_WHITE}" \
-        "$UI_RESET"
-
-    if git diff --check
-    then
-        ui_ok "Unstaged diff whitespace clean."
-    else
-        status_warn "Unstaged diff contains whitespace errors."
-    fi
-
-    printf '\n'
-    printf '%bSTAT%b\n' \
-        "${UI_BOLD}${UI_WHITE}" \
-        "$UI_RESET"
-
-    git diff --stat
-
-    printf '\n'
-    printf '%bNAME STATUS%b\n' \
-        "${UI_BOLD}${UI_WHITE}" \
-        "$UI_RESET"
-
-    git diff \
-        --name-status |
-    render_change_stream
-fi
-
-# ============================================================
-# UNTRACKED FILES
-# ============================================================
-
-if [ "$UNTRACKED" -gt 0 ]
-then
-    printf '\n'
-    ui_section "UNTRACKED"
-
-    git ls-files \
-        --others \
-        --exclude-standard |
-    sed 's/^/??\t/' |
-    render_change_stream
-fi
-
-# ============================================================
-# FILE INSPECTION
-# ============================================================
-
-if [ -s "$INSPECTION_FILES" ]
-then
-    while IFS= read -r FILE
-    do
-        render_file \
-            "$FILE" \
-            "$REQUESTED_RANGE"
-    done < "$INSPECTION_FILES"
-elif [ "$#" -gt 0 ] &&
-     [ -n "$REQUESTED_RANGE" ]
-then
-    status_warn "A line range was provided without a matching file."
-fi
 
 # ============================================================
 # SCORE
 # ============================================================
-
-SCORE=100
 
 DEDUCT_DETACHED=0
 DEDUCT_CONFLICTS=0
@@ -773,58 +560,128 @@ then
     SCORE=0
 fi
 
-printf '\n'
-ui_section "SCORE"
+# ============================================================
+# HEADER
+# ============================================================
 
-printf '  baseline ..................... 100\n'
-
-if [ "$DEDUCT_DETACHED" -gt 0 ]
+if [ -n "$BRANCH" ] &&
+   [ "$BRANCH" != "(detached)" ]
 then
-    printf '  detached HEAD ................ -%s\n' \
-        "$DEDUCT_DETACHED"
-fi
-
-if [ "$DEDUCT_CONFLICTS" -gt 0 ]
-then
-    printf '  conflicts .................... -%s\n' \
-        "$DEDUCT_CONFLICTS"
-fi
-
-if [ "$DEDUCT_BEHIND" -gt 0 ]
-then
-    printf '  behind upstream .............. -%s\n' \
-        "$DEDUCT_BEHIND"
-fi
-
-if [ "$DEDUCT_UNSTAGED" -gt 0 ]
-then
-    printf '  unstaged changes ............. -%s\n' \
-        "$DEDUCT_UNSTAGED"
-fi
-
-if [ "$DEDUCT_UNTRACKED" -gt 0 ]
-then
-    printf '  untracked files .............. -%s\n' \
-        "$DEDUCT_UNTRACKED"
-fi
-
-printf '  ------------------------------------------\n'
-
-if [ "$SCORE" -eq 100 ]
-then
-    ui_ok "Repository health: $SCORE / 100"
-elif [ "$SCORE" -ge 80 ]
-then
-    ui_info "Repository health: $SCORE / 100"
+    BRANCH_LABEL=$BRANCH
 else
-    status_warn "Repository health: $SCORE / 100"
+    BRANCH_LABEL="detached"
 fi
 
-printf '\n'
+if [ -n "$UPSTREAM" ]
+then
+    SYNC_LABEL="↑$AHEAD ↓$BEHIND"
+else
+    SYNC_LABEL="local"
+fi
 
-ui_banner \
-    "STATUSMAN :: OBSERVATION COMPLETE" \
+HEADER_META="$BRANCH_LABEL · $SHORT_OID · $SYNC_LABEL · stash $STASHES · SCORE $SCORE"
+
+ui_tool_header \
+    "STATUSMAN" \
+    "$REPOSITORY_NAME" \
+    "$HEADER_META" \
     "$UI_MAGENTA" \
     "$UI_CYAN"
 
+# ============================================================
+# WARNINGS
+# ============================================================
+
+if [ -s "$WARNINGS_FILE" ]
+then
+    while IFS= read -r WARNING
+    do
+        ui_warn "$WARNING"
+    done < "$WARNINGS_FILE"
+
+    printf '\n'
+fi
+
+# ============================================================
+# REPOSITORY STATE
+# ============================================================
+
+if [ "$STAGED" -eq 0 ] &&
+   [ "$UNSTAGED" -eq 0 ] &&
+   [ "$UNTRACKED" -eq 0 ] &&
+   [ "$CONFLICTS" -eq 0 ]
+then
+    ui_ok "Working tree clean."
+else
+    ui_section "CHANGES"
+
+    if [ "$CONFLICTS" -gt 0 ]
+    then
+        render_conflicts
+    fi
+
+    if [ "$STAGED" -gt 0 ]
+    then
+        render_name_status staged
+    fi
+
+    if [ "$UNSTAGED" -gt 0 ]
+    then
+        render_name_status unstaged
+    fi
+
+    if [ "$UNTRACKED" -gt 0 ]
+    then
+        render_untracked
+    fi
+
+    printf '\n'
+    ui_section "DIFF"
+
+    if [ "$STAGED" -gt 0 ]
+    then
+        render_diff_summary staged
+    fi
+
+    if [ "$UNSTAGED" -gt 0 ]
+    then
+        render_diff_summary unstaged
+    fi
+fi
+
+# ============================================================
+# FILE INSPECTION
+# ============================================================
+
+if [ -s "$INSPECTION_FILES" ]
+then
+    while IFS= read -r FILE
+    do
+        render_file "$FILE" "$REQUESTED_RANGE"
+    done < "$INSPECTION_FILES"
+elif [ "$#" -gt 0 ] &&
+     [ -n "$REQUESTED_RANGE" ] &&
+     [ "$FILE_ARGUMENT_COUNT" -eq 0 ]
+then
+    printf '\n'
+    ui_warn "A line range was provided without a matching file."
+fi
+
+# ============================================================
+# FOOTER
+# ============================================================
+
+if [ "$CONFLICTS" -gt 0 ]
+then
+    ui_footer_fail "Repository needs attention · SCORE $SCORE"
+elif [ "$SCORE" -eq 100 ]
+then
+    ui_footer_ok "Repository healthy · SCORE $SCORE"
+else
+    printf '\n'
+    ui_divider
+    ui_warn "Repository health · SCORE $SCORE"
+fi
+
+printf '\n'
 exit 0
