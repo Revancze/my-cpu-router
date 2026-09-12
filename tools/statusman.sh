@@ -73,6 +73,201 @@ render_change_stream()
     done
 }
 
+is_line_range()
+{
+    case "$1" in
+        [0-9]*-[0-9]*|[0-9]*-|-[0-9]*)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+resolve_range()
+{
+    RANGE_VALUE=$1
+    FILE_LINES=$2
+
+    RANGE_START=1
+    RANGE_END=$FILE_LINES
+
+    case "$RANGE_VALUE" in
+        -*)
+            RANGE_END=${RANGE_VALUE#-}
+            ;;
+
+        *-)
+            RANGE_START=${RANGE_VALUE%-}
+            ;;
+
+        *-*)
+            RANGE_START=${RANGE_VALUE%-*}
+            RANGE_END=${RANGE_VALUE#*-}
+            ;;
+    esac
+
+    case "$RANGE_START" in
+        ''|*[!0-9]*)
+            return 1
+            ;;
+    esac
+
+    case "$RANGE_END" in
+        ''|*[!0-9]*)
+            return 1
+            ;;
+    esac
+
+   if [ "$RANGE_START" -lt 1 ] ||
+   [ "$RANGE_END" -lt 1 ]
+then
+    return 1
+fi
+
+case "$RANGE_VALUE" in
+    *-)
+        if [ "$RANGE_START" -gt "$FILE_LINES" ]
+        then
+            return 0
+        fi
+        ;;
+
+    *)
+        if [ "$RANGE_START" -gt "$RANGE_END" ]
+        then
+            return 1
+        fi
+        ;;
+esac
+
+    if [ "$RANGE_END" -gt "$FILE_LINES" ]
+    then
+        RANGE_END=$FILE_LINES
+    fi
+
+    return 0
+}
+
+render_file()
+{
+    FILE=$1
+    REQUESTED_RANGE=$2
+
+    if [ ! -f "$FILE" ]
+    then
+        status_warn "File does not exist: $FILE"
+        return
+    fi
+
+    FILE_LINES=$(
+        awk 'END {
+            print NR + 0
+        }' "$FILE"
+    )
+
+    RANGE_START=1
+    RANGE_END=$FILE_LINES
+
+    if [ -n "$REQUESTED_RANGE" ]
+    then
+        if ! resolve_range \
+            "$REQUESTED_RANGE" \
+            "$FILE_LINES"
+        then
+            status_warn \
+                "Invalid line range '$REQUESTED_RANGE' for $FILE"
+            return
+        fi
+    fi
+
+    printf '\n'
+    ui_section "FILE :: $FILE"
+
+    printf '  lines ........................ %s\n' "$FILE_LINES"
+
+    if [ -n "$REQUESTED_RANGE" ]
+    then
+        printf '  requested range .............. %s\n' \
+            "$REQUESTED_RANGE"
+    else
+        printf '  requested range .............. all\n'
+    fi
+
+    if [ "$FILE_LINES" -eq 0 ]
+    then
+        ui_info "File is empty."
+        return
+    fi
+
+    if [ "$RANGE_START" -gt "$FILE_LINES" ]
+    then
+        status_warn \
+            "Range starts after end of file ($FILE_LINES lines)."
+        return
+    fi
+
+    printf '  displayed range .............. %s-%s\n' \
+        "$RANGE_START" \
+        "$RANGE_END"
+
+    printf '\n'
+
+    awk \
+        -v start="$RANGE_START" \
+        -v end="$RANGE_END" \
+        '
+        NR >= start && NR <= end {
+            printf "%6d | %s\n", NR, $0
+        }
+        ' \
+        "$FILE"
+}
+
+add_inspection_file()
+{
+    FILE=$1
+
+    if grep \
+        -Fqx \
+        "$FILE" \
+        "$INSPECTION_FILES" \
+        2>/dev/null
+    then
+        return
+    fi
+
+    printf '%s\n' "$FILE" >> "$INSPECTION_FILES"
+}
+
+resolve_file_argument()
+{
+    ARG=$1
+    MATCHED=0
+
+    if [ -f "$ARG" ]
+    then
+        add_inspection_file "$ARG"
+        return
+    fi
+
+    while IFS= read -r CANDIDATE
+    do
+        case "$CANDIDATE" in
+            $ARG)
+                add_inspection_file "$CANDIDATE"
+                MATCHED=1
+                ;;
+        esac
+    done < "$AVAILABLE_FILES"
+
+    if [ "$MATCHED" -eq 0 ]
+    then
+        status_warn "No file matches: $ARG"
+    fi
+}
+
 ui_banner \
     "STATUSMAN :: PROJECT STATUS" \
     "$UI_MAGENTA" \
@@ -101,17 +296,32 @@ fi
 # ============================================================
 
 STATUS_FILE=$(mktemp 2>/dev/null)
+AVAILABLE_FILES=$(mktemp 2>/dev/null)
+INSPECTION_FILES=$(mktemp 2>/dev/null)
 
 if [ -z "$STATUS_FILE" ] ||
-   [ ! -f "$STATUS_FILE" ]
+   [ ! -f "$STATUS_FILE" ] ||
+   [ -z "$AVAILABLE_FILES" ] ||
+   [ ! -f "$AVAILABLE_FILES" ] ||
+   [ -z "$INSPECTION_FILES" ] ||
+   [ ! -f "$INSPECTION_FILES" ]
 then
-    ui_fail "Could not create temporary status file."
+    ui_fail "Could not create temporary Statusman files."
+
+    rm -f \
+        "$STATUS_FILE" \
+        "$AVAILABLE_FILES" \
+        "$INSPECTION_FILES"
+
     exit 1
 fi
 
 cleanup()
 {
-    rm -f "$STATUS_FILE"
+    rm -f \
+        "$STATUS_FILE" \
+        "$AVAILABLE_FILES" \
+        "$INSPECTION_FILES"
 }
 
 trap cleanup 0
@@ -124,6 +334,53 @@ if ! git status \
 then
     ui_fail "Could not inspect repository status."
     exit 1
+fi
+
+git ls-files \
+    --cached \
+    --others \
+    --exclude-standard \
+    > "$AVAILABLE_FILES"
+
+    REQUESTED_RANGE=""
+
+if [ "$#" -gt 0 ]
+then
+    LAST_ARGUMENT=""
+
+    for ARG
+    do
+        LAST_ARGUMENT=$ARG
+    done
+
+    if is_line_range "$LAST_ARGUMENT"
+    then
+        REQUESTED_RANGE=$LAST_ARGUMENT
+        ARGUMENT_COUNT=$#
+
+        if [ "$ARGUMENT_COUNT" -gt 1 ]
+        then
+            FILE_ARGUMENT_COUNT=$((ARGUMENT_COUNT - 1))
+        else
+            FILE_ARGUMENT_COUNT=0
+        fi
+    else
+        FILE_ARGUMENT_COUNT=$#
+    fi
+
+    CURRENT_ARGUMENT=0
+
+    for ARG
+    do
+        CURRENT_ARGUMENT=$((CURRENT_ARGUMENT + 1))
+
+        if [ "$CURRENT_ARGUMENT" -gt "$FILE_ARGUMENT_COUNT" ]
+        then
+            break
+        fi
+
+        resolve_file_argument "$ARG"
+    done
 fi
 
 # ============================================================
@@ -446,6 +703,24 @@ then
         --exclude-standard |
     sed 's/^/??\t/' |
     render_change_stream
+fi
+
+# ============================================================
+# FILE INSPECTION
+# ============================================================
+
+if [ -s "$INSPECTION_FILES" ]
+then
+    while IFS= read -r FILE
+    do
+        render_file \
+            "$FILE" \
+            "$REQUESTED_RANGE"
+    done < "$INSPECTION_FILES"
+elif [ "$#" -gt 0 ] &&
+     [ -n "$REQUESTED_RANGE" ]
+then
+    status_warn "A line range was provided without a matching file."
 fi
 
 # ============================================================
