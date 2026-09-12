@@ -63,8 +63,7 @@ std::string normalizeObjFilename(
 std::string defaultObjFilename(
     const std::string& routeFilename)
 {
-    std::filesystem::path path(
-        routeFilename);
+    std::filesystem::path path(routeFilename);
 
     path.replace_extension(".obj");
 
@@ -81,14 +80,14 @@ const char* netTypeName(
 {
     switch (type)
     {
-        case NetType::Signal:
-            return "SIGNAL";
+    case NetType::Signal:
+        return "SIGNAL";
 
-        case NetType::VDD:
-            return "VDD";
+    case NetType::VDD:
+        return "VDD";
 
-        case NetType::VSS:
-            return "VSS";
+    case NetType::VSS:
+        return "VSS";
     }
 
     return "UNKNOWN";
@@ -100,14 +99,14 @@ const char* factorioWireName(
 {
     switch (wire)
     {
-        case FactorioWire::None:
-            return "NONE";
+    case FactorioWire::None:
+        return "NONE";
 
-        case FactorioWire::Red:
-            return "RW";
+    case FactorioWire::Red:
+        return "RW";
 
-        case FactorioWire::Green:
-            return "GW";
+    case FactorioWire::Green:
+        return "GW";
     }
 
     return "UNKNOWN";
@@ -121,77 +120,38 @@ const char* factorioWireName(
 void printWireInfo(
     const Wire& wire)
 {
-    std::cout
-        << "WIRE "
-        << wire.name
-        << '\n';
+    std::cout << "WIRE " << wire.name << '\n';
 
-    std::cout
-        << "Net: "
-        << wire.netName
-        << '\n';
+    std::cout << "Net: " << wire.netName << '\n';
 
-    std::cout
-        << "Type: "
-        << netTypeName(
-               wire.netType)
-        << '\n';
+    std::cout << "Type: " << netTypeName(wire.netType) << '\n';
 
-    std::cout
-        << "Factorio wire: "
-        << factorioWireName(
-               wire.factorioWire)
-        << '\n';
+    std::cout << "Factorio wire: " << factorioWireName(wire.factorioWire)
+              << '\n';
 
-    std::cout
-        << "Length: "
-        << wire.path.length()
-        << '\n';
+    std::cout << "Length: " << wire.path.length() << '\n';
 
-    std::cout
-        << "Turns: "
-        << wire.path.turns
-        << '\n';
+    std::cout << "Turns: " << wire.path.turns << '\n';
 
-    std::cout
-        << "Layer changes: "
-        << wire.path.layerChanges
-        << '\n';
+    std::cout << "Layer changes: " << wire.path.layerChanges << '\n';
 
-    std::cout
-        << "Cost: "
-        << wire.path.totalCost
-        << "\n\n";
+    std::cout << "Cost: " << wire.path.totalCost << "\n\n";
 }
 
 
 void printSegments(
     const Wire& wire)
 {
-    std::cout
-        << "SEGMENTS "
-        << wire.name
-        << '\n';
+    std::cout << "SEGMENTS " << wire.name << '\n';
 
-    for (std::size_t i = 0;
-         i < wire.segments.size();
-         ++i)
+    for (std::size_t i = 0; i < wire.segments.size(); ++i)
     {
-        const Segment& s =
-            wire.segments[i];
+        const Segment& s = wire.segments[i];
 
-        std::cout
-            << i + 1
-            << ": ("
-            << s.start.x << ","
-            << s.start.y << ","
-            << s.start.z << ") -> ("
-            << s.end.x << ","
-            << s.end.y << ","
-            << s.end.z << ")"
-            << " length="
-            << s.length()
-            << '\n';
+        std::cout << i + 1 << ": (" << s.start.x << "," << s.start.y << ","
+                  << s.start.z << ") -> (" << s.end.x << "," << s.end.y << ","
+                  << s.end.z << ")"
+                  << " length=" << s.length() << '\n';
     }
 
     std::cout << '\n';
@@ -201,27 +161,19 @@ void printSegments(
 void showModel(
     const RouteModel& model)
 {
-    for (const Wire& wire :
-         model.wires)
+    for (const Wire& wire : model.wires)
     {
         printWireInfo(wire);
         printSegments(wire);
     }
 
-    Renderer renderer(
-        model.width,
-        model.height,
-        model.layers);
+    Renderer renderer(model.width, model.height, model.layers);
 
-    renderer.render(
-        model,
-        View::Top);
+    renderer.render(model, View::Top);
 
     std::cout << '\n';
 
-    renderer.render(
-        model,
-        View::Side);
+    renderer.render(model, View::Side);
 }
 
 
@@ -239,17 +191,11 @@ bool routeAndAddWire(
     Point start,
     Point end)
 {
-    Path path =
-        router.findPath(
-            start,
-            end);
+    Path path = router.findPath(start, end);
 
     if (!path.found())
     {
-        std::cout
-            << "Wire "
-            << name
-            << " not found.\n";
+        std::cout << "Wire " << name << " not found.\n";
 
         return false;
     }
@@ -257,14 +203,7 @@ bool routeAndAddWire(
     router.commitPath(path);
 
     model.addWire(
-        Wire{
-            name,
-            netName,
-            netType,
-            factorioWire,
-            path,
-            buildSegments(path)
-        });
+        Wire{name, netName, netType, factorioWire, path, buildSegments(path)});
 
     return true;
 }
@@ -279,42 +218,32 @@ bool createNewRoute(
 
     constexpr int TURN_PENALTY = 3;
 
-    constexpr int LAYER_CHANGE_PENALTY =
-        2;
+    constexpr int LAYER_CHANGE_PENALTY = 2;
 
-    constexpr int UPPER_LAYER_STEP_PENALTY =
-        1;
+    constexpr int UPPER_LAYER_STEP_PENALTY = 1;
 
-    Router router(
-        WIDTH,
-        HEIGHT,
-        LAYERS,
-        TURN_PENALTY,
-        LAYER_CHANGE_PENALTY,
-        UPPER_LAYER_STEP_PENALTY);
+    Router router(WIDTH,
+                  HEIGHT,
+                  LAYERS,
+                  TURN_PENALTY,
+                  LAYER_CHANGE_PENALTY,
+                  UPPER_LAYER_STEP_PENALTY);
 
-    model =
-        RouteModel{
-            WIDTH,
-            HEIGHT,
-            LAYERS,
-            {}
-        };
+    model = RouteModel{WIDTH, HEIGHT, LAYERS, {}};
 
     // --------------------------------------------------------
     // WIRE A
     // VDD = Factorio Red Wire
     // --------------------------------------------------------
 
-    if (!routeAndAddWire(
-            router,
-            model,
-            'A',
-            "VDD",
-            NetType::VDD,
-            FactorioWire::Red,
-            Point{2, 4, 0},
-            Point{11, 4, 0}))
+    if (!routeAndAddWire(router,
+                         model,
+                         'A',
+                         "VDD",
+                         NetType::VDD,
+                         FactorioWire::Red,
+                         Point{2, 4, 0},
+                         Point{11, 4, 0}))
     {
         return false;
     }
@@ -324,15 +253,14 @@ bool createNewRoute(
     // VSS = Factorio Green Wire
     // --------------------------------------------------------
 
-    if (!routeAndAddWire(
-            router,
-            model,
-            'B',
-            "VSS",
-            NetType::VSS,
-            FactorioWire::Green,
-            Point{6, 1, 0},
-            Point{6, 8, 0}))
+    if (!routeAndAddWire(router,
+                         model,
+                         'B',
+                         "VSS",
+                         NetType::VSS,
+                         FactorioWire::Green,
+                         Point{6, 1, 0},
+                         Point{6, 8, 0}))
     {
         return false;
     }
@@ -350,38 +278,26 @@ bool loadRouteModel(
     RouteModel& model,
     std::string& normalizedFilename)
 {
-    normalizedFilename =
-        normalizeRouteFilename(
-            inputFilename);
+    normalizedFilename = normalizeRouteFilename(inputFilename);
 
     if (normalizedFilename.empty())
     {
-        std::cerr
-            << "Unsupported route file extension.\n"
-            << "Only .json is supported.\n";
+        std::cerr << "Unsupported route file extension.\n"
+                  << "Only .json is supported.\n";
 
         return false;
     }
 
     std::string error;
 
-    if (!loadRoute(
-            normalizedFilename,
-            model,
-            error))
+    if (!loadRoute(normalizedFilename, model, error))
     {
-        std::cerr
-            << "LOAD ERROR: "
-            << error
-            << '\n';
+        std::cerr << "LOAD ERROR: " << error << '\n';
 
         return false;
     }
 
-    std::cout
-        << "Loaded: "
-        << normalizedFilename
-        << "\n\n";
+    std::cout << "Loaded: " << normalizedFilename << "\n\n";
 
     return true;
 }
@@ -394,10 +310,7 @@ bool openRouteFile(
 
     std::string filename;
 
-    if (!loadRouteModel(
-            inputFilename,
-            model,
-            filename))
+    if (!loadRouteModel(inputFilename, model, filename))
     {
         return false;
     }
@@ -421,46 +334,31 @@ void saveModelInteractive(
 {
     std::string input;
 
-    std::cout
-        << "\nSave filename"
-        << " [route.json]: ";
+    std::cout << "\nSave filename"
+              << " [route.json]: ";
 
-    std::getline(
-        std::cin,
-        input);
+    std::getline(std::cin, input);
 
-    const std::string filename =
-        normalizeRouteFilename(
-            input);
+    const std::string filename = normalizeRouteFilename(input);
 
     if (filename.empty())
     {
-        std::cerr
-            << "Unsupported file extension.\n"
-            << "Only .json is supported.\n";
+        std::cerr << "Unsupported file extension.\n"
+                  << "Only .json is supported.\n";
 
         return;
     }
 
     std::string error;
 
-    if (!saveRoute(
-            model,
-            filename,
-            error))
+    if (!saveRoute(model, filename, error))
     {
-        std::cerr
-            << "SAVE ERROR: "
-            << error
-            << '\n';
+        std::cerr << "SAVE ERROR: " << error << '\n';
 
         return;
     }
 
-    std::cout
-        << "Saved: "
-        << filename
-        << '\n';
+    std::cout << "Saved: " << filename << '\n';
 }
 
 
@@ -474,23 +372,14 @@ bool exportModelObj(
 {
     std::string error;
 
-    if (!exportObj(
-            model,
-            filename,
-            error))
+    if (!exportObj(model, filename, error))
     {
-        std::cerr
-            << "OBJ EXPORT ERROR: "
-            << error
-            << '\n';
+        std::cerr << "OBJ EXPORT ERROR: " << error << '\n';
 
         return false;
     }
 
-    std::cout
-        << "\nOBJ exported: "
-        << filename
-        << '\n';
+    std::cout << "\nOBJ exported: " << filename << '\n';
 
     return true;
 }
@@ -502,31 +391,30 @@ bool exportModelObj(
 
 void printHelp()
 {
-    std::cout
-        << "Manhattan Router\n\n"
+    std::cout << "Manhattan Router\n\n"
 
-        << "Usage:\n\n"
+              << "Usage:\n\n"
 
-        << "  router13.exe\n"
-        << "      Interactive menu.\n\n"
+              << "  router13.exe\n"
+              << "      Interactive menu.\n\n"
 
-        << "  router13.exe route\n"
-        << "      Opens route.json without rerouting.\n\n"
+              << "  router13.exe route\n"
+              << "      Opens route.json without rerouting.\n\n"
 
-        << "  router13.exe route.json\n"
-        << "      Opens route.json without rerouting.\n\n"
+              << "  router13.exe route.json\n"
+              << "      Opens route.json without rerouting.\n\n"
 
-        << "  router13.exe route --obj\n"
-        << "      Opens route.json and exports route.obj.\n\n"
+              << "  router13.exe route --obj\n"
+              << "      Opens route.json and exports route.obj.\n\n"
 
-        << "  router13.exe route --obj cpu.obj\n"
-        << "      Opens route.json and exports cpu.obj.\n\n"
+              << "  router13.exe route --obj cpu.obj\n"
+              << "      Opens route.json and exports cpu.obj.\n\n"
 
-        << "  router13.exe --open route\n"
-        << "      Opens route.json without rerouting.\n\n"
+              << "  router13.exe --open route\n"
+              << "      Opens route.json without rerouting.\n\n"
 
-        << "  router13.exe --open route --obj\n"
-        << "      Opens route.json and exports route.obj.\n";
+              << "  router13.exe --open route --obj\n"
+              << "      Opens route.json and exports route.obj.\n";
 }
 
 
@@ -542,15 +430,13 @@ int runCommandLine(
 
     int argumentIndex = 1;
 
-    const std::string firstArgument =
-        argv[1];
+    const std::string firstArgument = argv[1];
 
     // --------------------------------------------------------
     // HELP
     // --------------------------------------------------------
 
-    if (firstArgument == "--help" ||
-        firstArgument == "-h")
+    if (firstArgument == "--help" || firstArgument == "-h")
     {
         printHelp();
 
@@ -561,19 +447,16 @@ int runCommandLine(
     // --open route
     // --------------------------------------------------------
 
-    if (firstArgument == "--open" ||
-        firstArgument == "-o")
+    if (firstArgument == "--open" || firstArgument == "-o")
     {
         if (argc < 3)
         {
-            std::cerr
-                << "Missing route filename.\n";
+            std::cerr << "Missing route filename.\n";
 
             return 1;
         }
 
-        routeArgument =
-            argv[2];
+        routeArgument = argv[2];
 
         argumentIndex = 3;
     }
@@ -584,8 +467,7 @@ int runCommandLine(
 
     else
     {
-        routeArgument =
-            firstArgument;
+        routeArgument = firstArgument;
 
         argumentIndex = 2;
 
@@ -593,11 +475,9 @@ int runCommandLine(
         //
         // router13.exe -route
 
-        if (routeArgument.size() > 1 &&
-            routeArgument.front() == '-')
+        if (routeArgument.size() > 1 && routeArgument.front() == '-')
         {
-            routeArgument.erase(
-                routeArgument.begin());
+            routeArgument.erase(routeArgument.begin());
         }
     }
 
@@ -609,10 +489,7 @@ int runCommandLine(
 
     std::string routeFilename;
 
-    if (!loadRouteModel(
-            routeArgument,
-            model,
-            routeFilename))
+    if (!loadRouteModel(routeArgument, model, routeFilename))
     {
         return 1;
     }
@@ -634,8 +511,7 @@ int runCommandLine(
 
     while (argumentIndex < argc)
     {
-        const std::string argument =
-            argv[argumentIndex];
+        const std::string argument = argv[argumentIndex];
 
         if (argument == "--obj")
         {
@@ -649,14 +525,11 @@ int runCommandLine(
 
             if (argumentIndex < argc)
             {
-                const std::string candidate =
-                    argv[argumentIndex];
+                const std::string candidate = argv[argumentIndex];
 
-                if (!candidate.empty() &&
-                    candidate.front() != '-')
+                if (!candidate.empty() && candidate.front() != '-')
                 {
-                    objFilename =
-                        candidate;
+                    objFilename = candidate;
 
                     ++argumentIndex;
                 }
@@ -665,10 +538,7 @@ int runCommandLine(
             continue;
         }
 
-        std::cerr
-            << "Unknown argument: "
-            << argument
-            << '\n';
+        std::cerr << "Unknown argument: " << argument << '\n';
 
         return 1;
     }
@@ -681,29 +551,22 @@ int runCommandLine(
     {
         if (objFilename.empty())
         {
-            objFilename =
-                defaultObjFilename(
-                    routeFilename);
+            objFilename = defaultObjFilename(routeFilename);
         }
         else
         {
-            objFilename =
-                normalizeObjFilename(
-                    objFilename);
+            objFilename = normalizeObjFilename(objFilename);
 
             if (objFilename.empty())
             {
-                std::cerr
-                    << "Unsupported OBJ filename.\n"
-                    << "Only .obj is supported.\n";
+                std::cerr << "Unsupported OBJ filename.\n"
+                          << "Only .obj is supported.\n";
 
                 return 1;
             }
         }
 
-        if (!exportModelObj(
-                model,
-                objFilename))
+        if (!exportModelObj(model, objFilename))
         {
             return 1;
         }
@@ -727,9 +590,7 @@ int main(
 
     if (argc > 1)
     {
-        return runCommandLine(
-            argc,
-            argv);
+        return runCommandLine(argc, argv);
     }
 
     // ========================================================
@@ -738,21 +599,18 @@ int main(
 
     while (true)
     {
-        std::cout
-            << "\n"
-            << "=== MANHATTAN ROUTER ===\n"
-            << '\n'
-            << "1 - New route\n"
-            << "2 - Open route\n"
-            << "3 - Exit\n"
-            << '\n'
-            << "> ";
+        std::cout << "\n"
+                  << "=== MANHATTAN ROUTER ===\n"
+                  << '\n'
+                  << "1 - New route\n"
+                  << "2 - Open route\n"
+                  << "3 - Exit\n"
+                  << '\n'
+                  << "> ";
 
         std::string choice;
 
-        std::getline(
-            std::cin,
-            choice);
+        std::getline(std::cin, choice);
 
         // ----------------------------------------------------
         // NEW ROUTE
@@ -764,14 +622,12 @@ int main(
 
             if (!createNewRoute(model))
             {
-                std::cerr
-                    << "Routing failed.\n";
+                std::cerr << "Routing failed.\n";
 
                 continue;
             }
 
-            std::cout
-                << "\nRoute calculated.\n\n";
+            std::cout << "\nRoute calculated.\n\n";
 
             showModel(model);
 
@@ -781,21 +637,15 @@ int main(
             //
             // router13.exe route --obj
 
-            std::cout
-                << "\nSave route? [Y/n]: ";
+            std::cout << "\nSave route? [Y/n]: ";
 
             std::string saveChoice;
 
-            std::getline(
-                std::cin,
-                saveChoice);
+            std::getline(std::cin, saveChoice);
 
-            if (saveChoice.empty() ||
-                saveChoice == "y" ||
-                saveChoice == "Y")
+            if (saveChoice.empty() || saveChoice == "y" || saveChoice == "Y")
             {
-                saveModelInteractive(
-                    model);
+                saveModelInteractive(model);
             }
         }
 
@@ -807,17 +657,13 @@ int main(
         {
             std::string filename;
 
-            std::cout
-                << "Filename: ";
+            std::cout << "Filename: ";
 
-            std::getline(
-                std::cin,
-                filename);
+            std::getline(std::cin, filename);
 
             if (!filename.empty())
             {
-                openRouteFile(
-                    filename);
+                openRouteFile(filename);
             }
         }
 
@@ -832,8 +678,7 @@ int main(
 
         else
         {
-            std::cout
-                << "Unknown option.\n";
+            std::cout << "Unknown option.\n";
         }
     }
 }

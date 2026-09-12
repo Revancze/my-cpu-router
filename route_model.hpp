@@ -25,13 +25,9 @@ struct Wire
 
     NetId netName;
 
-    NetType netType{
-        NetType::Signal
-    };
+    NetType netType{NetType::Signal};
 
-    FactorioWire factorioWire{
-        FactorioWire::None
-    };
+    FactorioWire factorioWire{FactorioWire::None};
 
     Path path;
 

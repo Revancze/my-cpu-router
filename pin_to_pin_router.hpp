@@ -3,7 +3,7 @@
 #include "component_model.hpp"
 #include "router.hpp"
 #include "routing_request.hpp"
-#include<string_view>
+#include <string_view>
 // ============================================================
 // PIN-TO-PIN ROUTE STATUS
 // ============================================================
@@ -27,26 +27,26 @@ constexpr std::string_view pinToPinRouteStatusName(
 
     switch (status)
     {
-        case OK:
-            return "OK";
+    case OK:
+        return "OK";
 
-        case UNSUPPORTED_MODE:
-            return "UNSUPPORTED_MODE";
+    case UNSUPPORTED_MODE:
+        return "UNSUPPORTED_MODE";
 
-        case SOURCE_COMPONENT_NOT_FOUND:
-            return "SOURCE_COMPONENT_NOT_FOUND";
+    case SOURCE_COMPONENT_NOT_FOUND:
+        return "SOURCE_COMPONENT_NOT_FOUND";
 
-        case SOURCE_PIN_NOT_FOUND:
-            return "SOURCE_PIN_NOT_FOUND";
+    case SOURCE_PIN_NOT_FOUND:
+        return "SOURCE_PIN_NOT_FOUND";
 
-        case TARGET_COMPONENT_NOT_FOUND:
-            return "TARGET_COMPONENT_NOT_FOUND";
+    case TARGET_COMPONENT_NOT_FOUND:
+        return "TARGET_COMPONENT_NOT_FOUND";
 
-        case TARGET_PIN_NOT_FOUND:
-            return "TARGET_PIN_NOT_FOUND";
+    case TARGET_PIN_NOT_FOUND:
+        return "TARGET_PIN_NOT_FOUND";
 
-        case PATH_NOT_FOUND:
-            return "PATH_NOT_FOUND";
+    case PATH_NOT_FOUND:
+        return "PATH_NOT_FOUND";
     }
 
     return "UNKNOWN";
@@ -58,9 +58,7 @@ constexpr std::string_view pinToPinRouteStatusName(
 
 struct PinToPinRouteResult
 {
-    PinToPinRouteStatus status{
-        PinToPinRouteStatus::PATH_NOT_FOUND
-    };
+    PinToPinRouteStatus status{PinToPinRouteStatus::PATH_NOT_FOUND};
 
     Path path;
 
@@ -74,7 +72,6 @@ struct PinToPinRouteResult
 // PIN-TO-PIN ROUTING
 // ============================================================
 
-PinToPinRouteResult routePinToPin(
-    const ComponentModel& model,
-    const RouteRequest& request,
-    const Router& router);
+PinToPinRouteResult routePinToPin(const ComponentModel& model,
+                                  const RouteRequest& request,
+                                  const Router& router);

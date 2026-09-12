@@ -8,11 +8,10 @@ struct Point
     int y{};
     int z{};
 
-    bool operator==(const Point& other) const
+    bool operator==(
+        const Point& other) const
     {
-        return x == other.x &&
-               y == other.y &&
-               z == other.z;
+        return x == other.x && y == other.y && z == other.z;
     }
 };
 
@@ -40,14 +39,13 @@ struct Path
 
 class Router
 {
-public:
-    Router(
-        int width,
-        int height,
-        int layers,
-        int turnPenalty = 3,
-        int layerChangePenalty = 2,
-        int upperLayerStepPenalty = 1);
+  public:
+    Router(int width,
+           int height,
+           int layers,
+           int turnPenalty = 3,
+           int layerChangePenalty = 2,
+           int upperLayerStepPenalty = 1);
 
     void addObstacle(Point p);
 
@@ -60,7 +58,7 @@ public:
     bool isWire(Point p) const;
     bool isBlocked(Point p) const;
 
-private:
+  private:
     int width_;
     int height_;
     int layers_;
@@ -69,11 +67,7 @@ private:
     int layerChangePenalty_;
     int upperLayerStepPenalty_;
 
-    std::vector<
-        std::vector<
-            std::vector<bool>>> obstacles_;
+    std::vector<std::vector<std::vector<bool>>> obstacles_;
 
-    std::vector<
-        std::vector<
-            std::vector<bool>>> wires_;
+    std::vector<std::vector<std::vector<bool>>> wires_;
 };

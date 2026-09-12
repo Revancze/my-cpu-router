@@ -9,14 +9,14 @@ const char* routingModeName(
 {
     switch (mode)
     {
-        case RoutingMode::AUTO:
-            return "AUTO";
+    case RoutingMode::AUTO:
+        return "AUTO";
 
-        case RoutingMode::GUIDED:
-            return "GUIDED";
+    case RoutingMode::GUIDED:
+        return "GUIDED";
 
-        case RoutingMode::MANUAL:
-            return "MANUAL";
+    case RoutingMode::MANUAL:
+        return "MANUAL";
     }
 
     return "UNKNOWN";
