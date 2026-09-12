@@ -67,8 +67,8 @@ Router::Router(
           std::vector<std::vector<bool>>(height,
                                          std::vector<bool>(width, false))),
       wires_(layers,
-             std::vector<std::vector<bool>>(height,
-                                            std::vector<bool>(width, false)))
+             std::vector<std::vector<WireCell>>(height,
+                                                std::vector<WireCell>(width)))
 {
 }
 
@@ -94,7 +94,7 @@ bool Router::isWire(
     if (!isInside(p))
         return false;
 
-    return wires_[p.z][p.y][p.x];
+    return wires_[p.z][p.y][p.x].occupied;
 }
 
 bool Router::isBlocked(
@@ -104,6 +104,41 @@ bool Router::isBlocked(
         return true;
 
     return isObstacle(p) || isWire(p);
+}
+
+bool Router::isBlocked(
+    Point p,
+    const NetId& netId) const
+{
+    if (!isInside(p))
+        return true;
+
+    if (isObstacle(p))
+        return true;
+
+    const WireCell& wire = wires_[p.z][p.y][p.x];
+
+    if (!wire.occupied)
+        return false;
+
+    if (!wire.owner.has_value())
+        return true;
+
+    return wire.owner.value() != netId;
+}
+
+std::optional<NetId> Router::wireOwner(
+    Point p) const
+{
+    if (!isInside(p))
+        return std::nullopt;
+
+    const WireCell& wire = wires_[p.z][p.y][p.x];
+
+    if (!wire.occupied)
+        return std::nullopt;
+
+    return wire.owner;
 }
 
 void Router::addObstacle(
@@ -118,8 +153,29 @@ void Router::commitPath(
 {
     for (const Point p : path.points)
     {
-        if (isInside(p))
-            wires_[p.z][p.y][p.x] = true;
+        if (!isInside(p))
+            continue;
+
+        WireCell& wire = wires_[p.z][p.y][p.x];
+
+        wire.occupied = true;
+        wire.owner.reset();
+    }
+}
+
+void Router::commitPath(
+    const Path& path,
+    const NetId& netId)
+{
+    for (const Point p : path.points)
+    {
+        if (!isInside(p))
+            continue;
+
+        WireCell& wire = wires_[p.z][p.y][p.x];
+
+        wire.occupied = true;
+        wire.owner = netId;
     }
 }
 
@@ -127,10 +183,33 @@ Path Router::findPath(
     Point start,
     Point end) const
 {
+    return findPathImpl(start, end, nullptr);
+}
+
+Path Router::findPath(
+    Point start,
+    Point end,
+    const NetId& netId) const
+{
+    return findPathImpl(start, end, &netId);
+}
+
+Path Router::findPathImpl(
+    Point start,
+    Point end,
+    const NetId* netId) const
+{
     Path result;
 
-    if (!isInside(start) || !isInside(end) || isBlocked(start) ||
-        isBlocked(end))
+    const auto blocked = [this, netId](Point p)
+    {
+        if (netId == nullptr)
+            return isBlocked(p);
+
+        return isBlocked(p, *netId);
+    };
+
+    if (!isInside(start) || !isInside(end) || blocked(start) || blocked(end))
     {
         return result;
     }
@@ -190,7 +269,7 @@ Path Router::findPath(
             if (!isInside(next))
                 continue;
 
-            if (isBlocked(next))
+            if (blocked(next))
                 continue;
 
             int stepCost = 1;

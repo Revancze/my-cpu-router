@@ -1,5 +1,8 @@
 #pragma once
 
+#include "net_id.hpp"
+
+#include <optional>
 #include <vector>
 
 struct Point
@@ -51,14 +54,30 @@ class Router
 
     Path findPath(Point start, Point end) const;
 
+    Path findPath(Point start, Point end, const NetId& netId) const;
+
     void commitPath(const Path& path);
+
+    void commitPath(const Path& path, const NetId& netId);
 
     bool isInside(Point p) const;
     bool isObstacle(Point p) const;
     bool isWire(Point p) const;
     bool isBlocked(Point p) const;
 
+    bool isBlocked(Point p, const NetId& netId) const;
+
+    std::optional<NetId> wireOwner(Point p) const;
+
   private:
+    struct WireCell
+    {
+        bool occupied{};
+        std::optional<NetId> owner;
+    };
+
+    Path findPathImpl(Point start, Point end, const NetId* netId) const;
+
     int width_;
     int height_;
     int layers_;
@@ -69,5 +88,5 @@ class Router
 
     std::vector<std::vector<std::vector<bool>>> obstacles_;
 
-    std::vector<std::vector<std::vector<bool>>> wires_;
+    std::vector<std::vector<std::vector<WireCell>>> wires_;
 };
