@@ -1,110 +1,87 @@
 #!/bin/sh
-
 set -u
 
-SCRIPT_DIR=$(
-    CDPATH= cd -- "$(dirname -- "$0")" &&
-    pwd
-)
-
-ROOT_DIR=$(
-    CDPATH= cd -- "$SCRIPT_DIR/.." &&
-    pwd
-)
-
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+ROOT_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
 cd "$ROOT_DIR" || exit 1
-
-# shellcheck source=tools/lib/console.sh
 . "$ROOT_DIR/tools/lib/console.sh"
 
-ui_mrproper_banner
+ui_tool_header "MRPROPER" "WORKTREE CLEANUP" "format · whitespace · EOF" "$UI_CYAN" "$UI_GREEN"
 
-ui_section "C++ FORMAT"
-
-if ! sh "$ROOT_DIR/tools/format.sh" --changed
-then
-    ui_fail "C++ formatting failed."
+ui_section "FORMAT"
+if ! sh "$ROOT_DIR/tools/format.sh" --changed; then
+    ui_footer_fail "CLEANUP FAILED"
     exit 1
 fi
 
-printf '\n'
-
-if command -v python >/dev/null 2>&1
-then
+if command -v python >/dev/null 2>&1; then
     PYTHON=python
-elif command -v python3 >/dev/null 2>&1
-then
+elif command -v python3 >/dev/null 2>&1; then
     PYTHON=python3
 else
     ui_fail "Python was not found in PATH."
+    ui_footer_fail "CLEANUP FAILED"
     exit 1
 fi
 
 RESULT_FILE=$(mktemp)
-
-if [ -z "$RESULT_FILE" ] || [ ! -f "$RESULT_FILE" ]
-then
+if [ ! -f "$RESULT_FILE" ]; then
     ui_fail "Could not create temporary result file."
+    ui_footer_fail "CLEANUP FAILED"
     exit 1
 fi
 
-if ! "$PYTHON" \
-    "$ROOT_DIR/tools/mrproper.py" \
-    > "$RESULT_FILE"
-then
+cleanup() { rm -f "$RESULT_FILE"; }
+trap cleanup 0
+
+if ! "$PYTHON" "$ROOT_DIR/tools/mrproper.py" > "$RESULT_FILE"; then
     ui_fail "Cleanup engine failed."
-    rm -f "$RESULT_FILE"
+    ui_footer_fail "CLEANUP FAILED"
     exit 1
 fi
 
 TAB=$(printf '\t')
+FILES_SCANNED=0
+FILES_MODIFIED=0
+WHITESPACE_CLEANED=0
+EOF_BLANKS_REMOVED=0
+FINAL_NEWLINES_ADDED=0
 
-while IFS="$TAB" read -r kind a b c d e
+printf '\n'
+ui_section "CLEANUP"
+
+while IFS="$TAB" read -r KIND A B C D E
 do
-    case "$kind" in
+    case "$KIND" in
         FIXED)
-            ui_fixed "$a"
-
-            if [ "$b" -gt 0 ]
-            then
-                printf '        trailing whitespace ..... %s\n' "$b"
-            fi
-
-            if [ "$c" -gt 0 ]
-            then
-                printf '        extra EOF blank lines ... %s\n' "$c"
-            fi
-
-            if [ "$d" -gt 0 ]
-            then
-                printf '        final newline added ..... yes\n'
-            fi
+            ui_fixed "$A"
+            [ "$B" -gt 0 ] && ui_muted "trailing whitespace · $B"
+            [ "$C" -gt 0 ] && ui_muted "EOF blank lines removed · $C"
+            [ "$D" -gt 0 ] && ui_muted "final newline added"
             ;;
-
         SUMMARY)
-            printf '\n'
-            ui_section "SUMMARY"
-
-            printf '  files scanned ................ %s\n' "$a"
-            printf '  files modified ............... %s\n' "$b"
-            printf '  whitespace lines cleaned ..... %s\n' "$c"
-            printf '  EOF blank lines removed ...... %s\n' "$d"
-            printf '  final newlines added ......... %s\n' "$e"
-
-            printf '\n'
-
-            if [ "$b" -eq 0 ]
-            then
-                ui_ok "Working tree already clean."
-            else
-                ui_ok "Working tree cleaned."
-                ui_info "Review changes before staging."
-            fi
+            FILES_SCANNED=$A
+            FILES_MODIFIED=$B
+            WHITESPACE_CLEANED=$C
+            EOF_BLANKS_REMOVED=$D
+            FINAL_NEWLINES_ADDED=$E
             ;;
     esac
 done < "$RESULT_FILE"
 
-rm -f "$RESULT_FILE"
+if [ "$FILES_MODIFIED" -eq 0 ]; then
+    ui_ok "No cleanup changes required."
+else
+    printf '\n'
+    ui_metric "files modified" "$FILES_MODIFIED"
+    [ "$WHITESPACE_CLEANED" -gt 0 ] && ui_metric "whitespace lines" "$WHITESPACE_CLEANED"
+    [ "$EOF_BLANKS_REMOVED" -gt 0 ] && ui_metric "EOF blank lines" "$EOF_BLANKS_REMOVED"
+    [ "$FINAL_NEWLINES_ADDED" -gt 0 ] && ui_metric "final newlines" "$FINAL_NEWLINES_ADDED"
+fi
 
-printf '\n'
+if [ "$FILES_MODIFIED" -eq 0 ]; then
+    ui_footer_ok "WORKTREE CLEAN · $FILES_SCANNED files scanned"
+else
+    ui_footer_ok "WORKTREE CLEANED · review before staging"
+fi
 exit 0
