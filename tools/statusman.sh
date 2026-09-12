@@ -250,6 +250,130 @@ render_diff_summary()
         "$STAT_TEXT"
 }
 
+
+build_diff_markers()
+{
+    FILE=$1
+    MODE=$2
+    MARKER_FILE=$3
+    REMOVAL_FILE=$4
+
+    : > "$MARKER_FILE"
+    : > "$REMOVAL_FILE"
+
+    if [ "$MODE" = "untracked" ]
+    then
+        awk '{ print NR "\t+" }' "$FILE" > "$MARKER_FILE"
+        return
+    fi
+
+    if [ "$MODE" = "staged" ]
+    then
+        DIFF_COMMAND="git diff --cached --unified=0 --no-color --"
+    else
+        DIFF_COMMAND="git diff --unified=0 --no-color --"
+    fi
+
+    $DIFF_COMMAND "$FILE" |
+    awk \
+        -v markers="$MARKER_FILE" \
+        -v removals="$REMOVAL_FILE" \
+        '
+        /^@@ / {
+            old_spec = $2
+            new_spec = $3
+
+            sub(/^-/, "", old_spec)
+            sub(/^\+/, "", new_spec)
+
+            old_parts_count = split(old_spec, old_parts, ",")
+            new_parts_count = split(new_spec, new_parts, ",")
+
+            old_count = (old_parts_count > 1) ? old_parts[2] + 0 : 1
+            new_start = new_parts[1] + 0
+            new_count = (new_parts_count > 1) ? new_parts[2] + 0 : 1
+
+            if (old_count == 0) {
+                for (i = 0; i < new_count; ++i)
+                    print (new_start + i) "\t+" >> markers
+
+                next
+            }
+
+            if (new_count == 0) {
+                print old_count >> removals
+                next
+            }
+
+            common = (old_count < new_count) ? old_count : new_count
+
+            for (i = 0; i < common; ++i)
+                print (new_start + i) "\t~" >> markers
+
+            for (i = common; i < new_count; ++i)
+                print (new_start + i) "\t+" >> markers
+
+            if (old_count > new_count)
+                print (old_count - new_count) >> removals
+        }
+        '
+}
+
+render_marker_summary()
+{
+    ADDED_COUNT=$1
+    MODIFIED_COUNT=$2
+    REMOVED_COUNT=$3
+
+    if [ "$ADDED_COUNT" -eq 0 ] &&
+       [ "$MODIFIED_COUNT" -eq 0 ] &&
+       [ "$REMOVED_COUNT" -eq 0 ]
+    then
+        return
+    fi
+
+    printf '\n  '
+    FIRST_SUMMARY=1
+
+    if [ "$ADDED_COUNT" -gt 0 ]
+    then
+        printf '%b+%s added%b' \
+            "$UI_GREEN" \
+            "$ADDED_COUNT" \
+            "$UI_RESET"
+        FIRST_SUMMARY=0
+    fi
+
+    if [ "$MODIFIED_COUNT" -gt 0 ]
+    then
+        if [ "$FIRST_SUMMARY" -eq 0 ]
+        then
+            printf ' · '
+        fi
+
+        printf '%b~%s changed%b' \
+            "$UI_YELLOW" \
+            "$MODIFIED_COUNT" \
+            "$UI_RESET"
+        FIRST_SUMMARY=0
+    fi
+
+    if [ "$REMOVED_COUNT" -gt 0 ]
+    then
+        if [ "$FIRST_SUMMARY" -eq 0 ]
+        then
+            printf ' · '
+        fi
+
+        printf '%b-%s removed%b' \
+            "$UI_RED" \
+            "$REMOVED_COUNT" \
+            "$UI_RESET"
+    fi
+
+    printf '\n'
+}
+
 render_file()
 {
     FILE=$1
@@ -277,10 +401,51 @@ render_file()
         fi
     fi
 
+    FILE_STAGED=0
+    FILE_UNSTAGED=0
+    FILE_UNTRACKED=0
+
+    if ! git ls-files --error-unmatch -- "$FILE" >/dev/null 2>&1
+    then
+        FILE_UNTRACKED=1
+    else
+        if ! git diff --cached --quiet -- "$FILE"
+        then
+            FILE_STAGED=1
+        fi
+
+        if ! git diff --quiet -- "$FILE"
+        then
+            FILE_UNSTAGED=1
+        fi
+    fi
+
+    MARKER_MODE="clean"
+    FILE_STATE="clean"
+
+    if [ "$FILE_UNTRACKED" -eq 1 ]
+    then
+        MARKER_MODE="untracked"
+        FILE_STATE="untracked"
+    elif [ "$FILE_UNSTAGED" -eq 1 ] &&
+         [ "$FILE_STAGED" -eq 1 ]
+    then
+        MARKER_MODE="unstaged"
+        FILE_STATE="staged + unstaged"
+    elif [ "$FILE_UNSTAGED" -eq 1 ]
+    then
+        MARKER_MODE="unstaged"
+        FILE_STATE="unstaged"
+    elif [ "$FILE_STAGED" -eq 1 ]
+    then
+        MARKER_MODE="staged"
+        FILE_STATE="staged"
+    fi
+
     if [ "$FILE_LINES" -eq 0 ]
     then
         printf '\n'
-        ui_section "$FILE"
+        ui_section "$FILE · $FILE_STATE"
         ui_muted "empty file"
         return
     fi
@@ -293,26 +458,107 @@ render_file()
         return
     fi
 
+    MARKER_FILE=$(mktemp)
+    REMOVAL_FILE=$(mktemp)
+
+    if [ -z "$MARKER_FILE" ] ||
+       [ ! -f "$MARKER_FILE" ] ||
+       [ -z "$REMOVAL_FILE" ] ||
+       [ ! -f "$REMOVAL_FILE" ]
+    then
+        rm -f "$MARKER_FILE" "$REMOVAL_FILE"
+        ui_warn "Could not create diff marker files for $FILE"
+        return
+    fi
+
+    if [ "$MARKER_MODE" != "clean" ]
+    then
+        build_diff_markers \
+            "$FILE" \
+            "$MARKER_MODE" \
+            "$MARKER_FILE" \
+            "$REMOVAL_FILE"
+    else
+        : > "$MARKER_FILE"
+        : > "$REMOVAL_FILE"
+    fi
+
+    ADDED_COUNT=$(
+        awk -F '\t' '$2 == "+" { count++ } END { print count + 0 }' \
+            "$MARKER_FILE"
+    )
+
+    MODIFIED_COUNT=$(
+        awk -F '\t' '$2 == "~" { count++ } END { print count + 0 }' \
+            "$MARKER_FILE"
+    )
+
+    REMOVED_COUNT=$(
+        awk '{ total += $1 } END { print total + 0 }' \
+            "$REMOVAL_FILE"
+    )
+
     printf '\n'
 
     if [ -n "$REQUESTED_RANGE" ]
     then
-        ui_section "$FILE · lines $RANGE_START-$RANGE_END"
+        ui_section "$FILE · lines $RANGE_START-$RANGE_END · $FILE_STATE"
     else
-        ui_section "$FILE · lines 1-$FILE_LINES"
+        ui_section "$FILE · lines 1-$FILE_LINES · $FILE_STATE"
+    fi
+
+    if [ "$FILE_STAGED" -eq 1 ] &&
+       [ "$FILE_UNSTAGED" -eq 1 ]
+    then
+        ui_muted "line markers show unstaged working-tree changes"
+        printf '\n'
     fi
 
     awk \
+        -F '\t' \
         -v start="$RANGE_START" \
         -v end="$RANGE_END" \
         -v dim="$UI_DIM" \
+        -v green="$UI_GREEN" \
+        -v yellow="$UI_YELLOW" \
         -v reset="$UI_RESET" \
         '
-        NR >= start && NR <= end {
-            printf "%s%6d%s │ %s\n", dim, NR, reset, $0
+        NR == FNR {
+            marker[$1] = $2
+            next
+        }
+
+        FNR >= start && FNR <= end {
+            kind = marker[FNR]
+            prefix = " "
+            color = ""
+
+            if (kind == "+") {
+                prefix = "+"
+                color = green
+            } else if (kind == "~") {
+                prefix = "~"
+                color = yellow
+            }
+
+            printf "%s%s%s %s%6d%s │ %s\n", \
+                color, prefix, reset, dim, FNR, reset, $0
         }
         ' \
+        "$MARKER_FILE" \
         "$FILE"
+
+    render_marker_summary \
+        "$ADDED_COUNT" \
+        "$MODIFIED_COUNT" \
+        "$REMOVED_COUNT"
+
+    if [ "$REMOVED_COUNT" -gt 0 ]
+    then
+        ui_muted "removed lines are summarized because they no longer exist in the current file"
+    fi
+
+    rm -f "$MARKER_FILE" "$REMOVAL_FILE"
 }
 
 # ============================================================
@@ -635,17 +881,21 @@ else
         render_untracked
     fi
 
-    printf '\n'
-    ui_section "DIFF"
-
-    if [ "$STAGED" -gt 0 ]
+    if [ "$STAGED" -gt 0 ] ||
+       [ "$UNSTAGED" -gt 0 ]
     then
-        render_diff_summary staged
-    fi
+        printf '\n'
+        ui_section "DIFF"
 
-    if [ "$UNSTAGED" -gt 0 ]
-    then
-        render_diff_summary unstaged
+        if [ "$STAGED" -gt 0 ]
+        then
+            render_diff_summary staged
+        fi
+
+        if [ "$UNSTAGED" -gt 0 ]
+        then
+            render_diff_summary unstaged
+        fi
     fi
 fi
 
