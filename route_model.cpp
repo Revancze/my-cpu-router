@@ -1,11 +1,13 @@
 #include "route_model.hpp"
 
-void RouteModel::addWire(const Wire& wire)
+void RouteModel::addWire(
+    const Wire& wire)
 {
     wires.push_back(wire);
 }
 
-const Wire* RouteModel::findWire(char name) const
+const Wire* RouteModel::findWire(
+    char name) const
 {
     for (const Wire& wire : wires)
     {

@@ -30,8 +30,7 @@ enum class RoutingMode
 // ROUTING MODE HELPERS
 // ============================================================
 
-const char* routingModeName(
-    RoutingMode mode);
+const char* routingModeName(RoutingMode mode);
 
 // ============================================================
 // ROUTING REQUEST
@@ -42,9 +41,7 @@ struct RouteRequest
     PinRef source;
     PinRef target;
 
-    RoutingMode mode{
-        RoutingMode::AUTO
-    };
+    RoutingMode mode{RoutingMode::AUTO};
 
     std::vector<Point> waypoints;
 };

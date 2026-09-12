@@ -31,11 +31,9 @@ struct Component
 
     std::vector<Pin> pins;
 
-    Pin* findPin(
-        const std::string& name);
+    Pin* findPin(const std::string& name);
 
-    const Pin* findPin(
-        const std::string& name) const;
+    const Pin* findPin(const std::string& name) const;
 };
 
 
@@ -60,9 +58,7 @@ struct Net
 
     std::vector<NetConnection> connections;
 
-    void connect(
-        const std::string& componentId,
-        const std::string& pinName);
+    void connect(const std::string& componentId, const std::string& pinName);
 };
 
 
@@ -75,21 +71,15 @@ struct ComponentModel
     std::vector<Component> components;
     std::vector<Net> nets;
 
-    void addComponent(
-        const Component& component);
+    void addComponent(const Component& component);
 
-    void addNet(
-        const Net& net);
+    void addNet(const Net& net);
 
-    Component* findComponent(
-        const std::string& id);
+    Component* findComponent(const std::string& id);
 
-    const Component* findComponent(
-        const std::string& id) const;
+    const Component* findComponent(const std::string& id) const;
 
-    Net* findNet(
-        const NetId& name);
+    Net* findNet(const NetId& name);
 
-    const Net* findNet(
-        const NetId& name) const;
+    const Net* findNet(const NetId& name) const;
 };

@@ -19,6 +19,16 @@ cd "$ROOT_DIR" || exit 1
 
 ui_mrproper_banner
 
+ui_section "C++ FORMAT"
+
+if ! sh "$ROOT_DIR/tools/format.sh" --changed
+then
+    ui_fail "C++ formatting failed."
+    exit 1
+fi
+
+printf '\n'
+
 if command -v python >/dev/null 2>&1
 then
     PYTHON=python

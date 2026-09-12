@@ -188,6 +188,40 @@ fi
 
 ui_ok "Staged snapshot created."
 
+if [ ! -f "$SNAPSHOT_DIR/tools/format-check.sh" ]
+then
+    ui_fail "Staged snapshot does not contain tools/format-check.sh."
+    exit 1
+fi
+
+if [ ! -f "$SNAPSHOT_DIR/.clang-format" ]
+then
+    ui_fail "Staged snapshot does not contain .clang-format."
+    exit 1
+fi
+
+printf '\n'
+ui_section "C++ FORMAT CHECK"
+
+if ! FORMAT_ROOT="$SNAPSHOT_DIR" \
+    sh "$SNAPSHOT_DIR/tools/format-check.sh"
+then
+    printf '\n'
+
+    ui_fail "Staged snapshot is not clang-format clean."
+
+    printf '\n'
+
+    ui_banner \
+        "DOORMAN :: ACCESS DENIED" \
+        "$UI_RED" \
+        "$UI_YELLOW"
+
+    exit 1
+fi
+
+ui_ok "Staged C++ formatting clean."
+
 if [ ! -f "$SNAPSHOT_DIR/tools/ironman.sh" ]
 then
     ui_fail "Staged snapshot does not contain tools/ironman.sh."

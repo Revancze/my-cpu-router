@@ -20,15 +20,12 @@ enum class TransistorType
 // TRANSISTOR HELPERS
 // ============================================================
 
-const char* transistorTypeName(
-    TransistorType type);
+const char* transistorTypeName(TransistorType type);
 
 
 // ============================================================
 // TRANSISTOR FACTORY
 // ============================================================
 
-Component makeTransistor(
-    const std::string& id,
-    TransistorType type,
-    Point position);
+Component
+makeTransistor(const std::string& id, TransistorType type, Point position);

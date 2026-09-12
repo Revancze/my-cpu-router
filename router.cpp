@@ -8,50 +8,49 @@
 
 namespace
 {
-    constexpr int DIR_RIGHT = 0;
-    constexpr int DIR_LEFT  = 1;
-    constexpr int DIR_DOWN  = 2;
-    constexpr int DIR_UP    = 3;
-    constexpr int DIR_Z_UP  = 4;
-    constexpr int DIR_Z_DOWN = 5;
-    constexpr int DIR_NONE  = 6;
+constexpr int DIR_RIGHT = 0;
+constexpr int DIR_LEFT = 1;
+constexpr int DIR_DOWN = 2;
+constexpr int DIR_UP = 3;
+constexpr int DIR_Z_UP = 4;
+constexpr int DIR_Z_DOWN = 5;
+constexpr int DIR_NONE = 6;
 
-    constexpr int DIR_COUNT = 7;
+constexpr int DIR_COUNT = 7;
 
-    constexpr std::array<Point, 6> directions =
-    {
-        Point{ 1,  0,  0},
-        Point{-1,  0,  0},
-        Point{ 0,  1,  0},
-        Point{ 0, -1,  0},
-        Point{ 0,  0,  1},
-        Point{ 0,  0, -1}
-    };
+constexpr std::array<Point, 6> directions = {Point{1, 0, 0},
+                                             Point{-1, 0, 0},
+                                             Point{0, 1, 0},
+                                             Point{0, -1, 0},
+                                             Point{0, 0, 1},
+                                             Point{0, 0, -1}};
 
-    bool isPlanarDirection(int dir)
-    {
-        return dir >= 0 && dir <= 3;
-    }
-
-    struct State
-    {
-        int x{};
-        int y{};
-        int z{};
-        int dir{};
-    };
-
-    struct QueueNode
-    {
-        int cost{};
-        State state{};
-
-        bool operator>(const QueueNode& other) const
-        {
-            return cost > other.cost;
-        }
-    };
+bool isPlanarDirection(
+    int dir)
+{
+    return dir >= 0 && dir <= 3;
 }
+
+struct State
+{
+    int x{};
+    int y{};
+    int z{};
+    int dir{};
+};
+
+struct QueueNode
+{
+    int cost{};
+    State state{};
+
+    bool operator>(
+        const QueueNode& other) const
+    {
+        return cost > other.cost;
+    }
+};
+} // namespace
 
 Router::Router(
     int width,
@@ -60,36 +59,28 @@ Router::Router(
     int turnPenalty,
     int layerChangePenalty,
     int upperLayerStepPenalty)
-    : width_(width),
-      height_(height),
-      layers_(layers),
-      turnPenalty_(turnPenalty),
-      layerChangePenalty_(layerChangePenalty),
+    : width_(width), height_(height), layers_(layers),
+      turnPenalty_(turnPenalty), layerChangePenalty_(layerChangePenalty),
       upperLayerStepPenalty_(upperLayerStepPenalty),
       obstacles_(
           layers,
-          std::vector<std::vector<bool>>(
-              height,
-              std::vector<bool>(width, false))),
-      wires_(
-          layers,
-          std::vector<std::vector<bool>>(
-              height,
-              std::vector<bool>(width, false)))
+          std::vector<std::vector<bool>>(height,
+                                         std::vector<bool>(width, false))),
+      wires_(layers,
+             std::vector<std::vector<bool>>(height,
+                                            std::vector<bool>(width, false)))
 {
 }
 
-bool Router::isInside(Point p) const
+bool Router::isInside(
+    Point p) const
 {
-    return p.x >= 0 &&
-           p.y >= 0 &&
-           p.z >= 0 &&
-           p.x < width_ &&
-           p.y < height_ &&
+    return p.x >= 0 && p.y >= 0 && p.z >= 0 && p.x < width_ && p.y < height_ &&
            p.z < layers_;
 }
 
-bool Router::isObstacle(Point p) const
+bool Router::isObstacle(
+    Point p) const
 {
     if (!isInside(p))
         return true;
@@ -97,7 +88,8 @@ bool Router::isObstacle(Point p) const
     return obstacles_[p.z][p.y][p.x];
 }
 
-bool Router::isWire(Point p) const
+bool Router::isWire(
+    Point p) const
 {
     if (!isInside(p))
         return false;
@@ -105,7 +97,8 @@ bool Router::isWire(Point p) const
     return wires_[p.z][p.y][p.x];
 }
 
-bool Router::isBlocked(Point p) const
+bool Router::isBlocked(
+    Point p) const
 {
     if (!isInside(p))
         return true;
@@ -113,13 +106,15 @@ bool Router::isBlocked(Point p) const
     return isObstacle(p) || isWire(p);
 }
 
-void Router::addObstacle(Point p)
+void Router::addObstacle(
+    Point p)
 {
     if (isInside(p))
         obstacles_[p.z][p.y][p.x] = true;
 }
 
-void Router::commitPath(const Path& path)
+void Router::commitPath(
+    const Path& path)
 {
     for (const Point p : path.points)
     {
@@ -128,13 +123,13 @@ void Router::commitPath(const Path& path)
     }
 }
 
-Path Router::findPath(Point start, Point end) const
+Path Router::findPath(
+    Point start,
+    Point end) const
 {
     Path result;
 
-    if (!isInside(start) ||
-        !isInside(end) ||
-        isBlocked(start) ||
+    if (!isInside(start) || !isInside(end) || isBlocked(start) ||
         isBlocked(end))
     {
         return result;
@@ -146,96 +141,51 @@ Path Router::findPath(Point start, Point end) const
         return result;
     }
 
-    const int stateCount =
-        width_ *
-        height_ *
-        layers_ *
-        DIR_COUNT;
+    const int stateCount = width_ * height_ * layers_ * DIR_COUNT;
 
-    const int INF =
-        std::numeric_limits<int>::max();
+    const int INF = std::numeric_limits<int>::max();
 
-    std::vector<int> distance(
-        stateCount,
-        INF);
+    std::vector<int> distance(stateCount, INF);
 
-    std::vector<State> parent(
-        stateCount,
-        State{-1, -1, -1, -1});
+    std::vector<State> parent(stateCount, State{-1, -1, -1, -1});
 
-    auto indexOf =
-        [this](
-            int x,
-            int y,
-            int z,
-            int dir)
-        {
-            return
-                ((((z * height_) + y) * width_ + x)
-                 * DIR_COUNT)
-                + dir;
-        };
-
-    std::priority_queue<
-        QueueNode,
-        std::vector<QueueNode>,
-        std::greater<QueueNode>
-    > queue;
-
-    State startState
+    auto indexOf = [this](int x, int y, int z, int dir)
     {
-        start.x,
-        start.y,
-        start.z,
-        DIR_NONE
+        return ((((z * height_) + y) * width_ + x) * DIR_COUNT) + dir;
     };
 
-    distance[
-        indexOf(
-            start.x,
-            start.y,
-            start.z,
-            DIR_NONE)] = 0;
+    std::priority_queue<QueueNode,
+                        std::vector<QueueNode>,
+                        std::greater<QueueNode>>
+        queue;
 
-    queue.push(
-        QueueNode{
-            0,
-            startState
-        });
+    State startState{start.x, start.y, start.z, DIR_NONE};
+
+    distance[indexOf(start.x, start.y, start.z, DIR_NONE)] = 0;
+
+    queue.push(QueueNode{0, startState});
 
     while (!queue.empty())
     {
-        QueueNode currentNode =
-            queue.top();
+        QueueNode currentNode = queue.top();
 
         queue.pop();
 
-        State current =
-            currentNode.state;
+        State current = currentNode.state;
 
         const int currentIndex =
-            indexOf(
-                current.x,
-                current.y,
-                current.z,
-                current.dir);
+            indexOf(current.x, current.y, current.z, current.dir);
 
-        if (currentNode.cost !=
-            distance[currentIndex])
+        if (currentNode.cost != distance[currentIndex])
         {
             continue;
         }
 
-        for (int nextDir = 0;
-             nextDir < 6;
-             ++nextDir)
+        for (int nextDir = 0; nextDir < 6; ++nextDir)
         {
-            Point next
-            {
-                current.x + directions[nextDir].x,
-                current.y + directions[nextDir].y,
-                current.z + directions[nextDir].z
-            };
+            Point next{current.x + directions[nextDir].x,
+                       current.y + directions[nextDir].y,
+                       current.z + directions[nextDir].z};
 
             if (!isInside(next))
                 continue;
@@ -246,11 +196,9 @@ Path Router::findPath(Point start, Point end) const
             int stepCost = 1;
 
             // Pohyb mezi vrstvami.
-            if (nextDir == DIR_Z_UP ||
-                nextDir == DIR_Z_DOWN)
+            if (nextDir == DIR_Z_UP || nextDir == DIR_Z_DOWN)
             {
-                stepCost +=
-                    layerChangePenalty_;
+                stepCost += layerChangePenalty_;
             }
             else
             {
@@ -258,50 +206,29 @@ Path Router::findPath(Point start, Point end) const
                 // aby router nedelal zbytecne dlouhe mosty.
                 if (next.z > 0)
                 {
-                    stepCost +=
-                        upperLayerStepPenalty_;
+                    stepCost += upperLayerStepPenalty_;
                 }
 
                 // Penalizace zatacky pouze v rovine XY.
-                if (current.dir != DIR_NONE &&
-                    isPlanarDirection(current.dir) &&
+                if (current.dir != DIR_NONE && isPlanarDirection(current.dir) &&
                     current.dir != nextDir)
                 {
-                    stepCost +=
-                        turnPenalty_;
+                    stepCost += turnPenalty_;
                 }
             }
 
-            const int newCost =
-                currentNode.cost +
-                stepCost;
+            const int newCost = currentNode.cost + stepCost;
 
-            const int nextIndex =
-                indexOf(
-                    next.x,
-                    next.y,
-                    next.z,
-                    nextDir);
+            const int nextIndex = indexOf(next.x, next.y, next.z, nextDir);
 
-            if (newCost <
-                distance[nextIndex])
+            if (newCost < distance[nextIndex])
             {
-                distance[nextIndex] =
-                    newCost;
+                distance[nextIndex] = newCost;
 
-                parent[nextIndex] =
-                    current;
+                parent[nextIndex] = current;
 
                 queue.push(
-                    QueueNode{
-                        newCost,
-                        State{
-                            next.x,
-                            next.y,
-                            next.z,
-                            nextDir
-                        }
-                    });
+                    QueueNode{newCost, State{next.x, next.y, next.z, nextDir}});
             }
         }
     }
@@ -309,21 +236,13 @@ Path Router::findPath(Point start, Point end) const
     int bestDir = -1;
     int bestCost = INF;
 
-    for (int dir = 0;
-         dir < 6;
-         ++dir)
+    for (int dir = 0; dir < 6; ++dir)
     {
-        const int index =
-            indexOf(
-                end.x,
-                end.y,
-                end.z,
-                dir);
+        const int index = indexOf(end.x, end.y, end.z, dir);
 
         if (distance[index] < bestCost)
         {
-            bestCost =
-                distance[index];
+            bestCost = distance[index];
 
             bestDir = dir;
         }
@@ -332,42 +251,22 @@ Path Router::findPath(Point start, Point end) const
     if (bestDir == -1)
         return result;
 
-    State current
-    {
-        end.x,
-        end.y,
-        end.z,
-        bestDir
-    };
+    State current{end.x, end.y, end.z, bestDir};
 
-    while (!(current.x == start.x &&
-             current.y == start.y &&
-             current.z == start.z &&
-             current.dir == DIR_NONE))
+    while (!(current.x == start.x && current.y == start.y &&
+             current.z == start.z && current.dir == DIR_NONE))
     {
-        result.points.push_back(
-            Point{
-                current.x,
-                current.y,
-                current.z
-            });
+        result.points.push_back(Point{current.x, current.y, current.z});
 
         const int currentIndex =
-            indexOf(
-                current.x,
-                current.y,
-                current.z,
-                current.dir);
+            indexOf(current.x, current.y, current.z, current.dir);
 
-        current =
-            parent[currentIndex];
+        current = parent[currentIndex];
     }
 
     result.points.push_back(start);
 
-    std::reverse(
-        result.points.begin(),
-        result.points.end());
+    std::reverse(result.points.begin(), result.points.end());
 
     result.totalCost = bestCost;
 
@@ -377,21 +276,13 @@ Path Router::findPath(Point start, Point end) const
     int previousDx = 0;
     int previousDy = 0;
 
-    for (std::size_t i = 1;
-         i < result.points.size();
-         ++i)
+    for (std::size_t i = 1; i < result.points.size(); ++i)
     {
-        const int dx =
-            result.points[i].x -
-            result.points[i - 1].x;
+        const int dx = result.points[i].x - result.points[i - 1].x;
 
-        const int dy =
-            result.points[i].y -
-            result.points[i - 1].y;
+        const int dy = result.points[i].y - result.points[i - 1].y;
 
-        const int dz =
-            result.points[i].z -
-            result.points[i - 1].z;
+        const int dz = result.points[i].z - result.points[i - 1].z;
 
         if (dz != 0)
         {
@@ -400,8 +291,7 @@ Path Router::findPath(Point start, Point end) const
         }
 
         if (havePreviousPlanarDirection &&
-            (dx != previousDx ||
-             dy != previousDy))
+            (dx != previousDx || dy != previousDy))
         {
             ++result.turns;
         }

@@ -12,39 +12,25 @@ enum class View
 
 class Renderer
 {
-public:
-    Renderer(
-        int width,
-        int height,
-        int layers);
+  public:
+    Renderer(int width, int height, int layers);
 
-    void render(
-        const RouteModel& model,
-        View view) const;
+    void render(const RouteModel& model, View view) const;
 
-private:
+  private:
     int width_;
     int height_;
     int layers_;
 
-    void renderTop(
-        const std::vector<Wire>& wires) const;
+    void renderTop(const std::vector<Wire>& wires) const;
 
-    void renderSide(
-        const std::vector<Wire>& wires) const;
+    void renderSide(const std::vector<Wire>& wires) const;
 
-    char glyphTop(
-        const std::vector<Wire>& wires,
-        int x,
-        int y) const;
+    char glyphTop(const std::vector<Wire>& wires, int x, int y) const;
 
-    char glyphSide(
-        const std::vector<Wire>& wires,
-        int y,
-        int z) const;
+    char glyphSide(const std::vector<Wire>& wires, int y, int z) const;
 
-    bool hasVerticalConnection(
-        const std::vector<Wire>& wires,
-        int y,
-        int lowerZ) const;
+    bool hasVerticalConnection(const std::vector<Wire>& wires,
+                               int y,
+                               int lowerZ) const;
 };

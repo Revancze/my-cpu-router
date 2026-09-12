@@ -43,11 +43,7 @@ void Net::connect(
     const std::string& componentId,
     const std::string& pinName)
 {
-    connections.push_back(
-        NetConnection{
-            componentId,
-            pinName
-        });
+    connections.push_back(NetConnection{componentId, pinName});
 }
 
 
@@ -58,24 +54,21 @@ void Net::connect(
 void ComponentModel::addComponent(
     const Component& component)
 {
-    components.push_back(
-        component);
+    components.push_back(component);
 }
 
 
 void ComponentModel::addNet(
     const Net& net)
 {
-    nets.push_back(
-        net);
+    nets.push_back(net);
 }
 
 
 Component* ComponentModel::findComponent(
     const std::string& id)
 {
-    for (Component& component :
-         components)
+    for (Component& component : components)
     {
         if (component.id == id)
         {
@@ -90,8 +83,7 @@ Component* ComponentModel::findComponent(
 const Component* ComponentModel::findComponent(
     const std::string& id) const
 {
-    for (const Component& component :
-         components)
+    for (const Component& component : components)
     {
         if (component.id == id)
         {

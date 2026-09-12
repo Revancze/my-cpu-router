@@ -12,73 +12,72 @@ using json = nlohmann::json;
 
 namespace
 {
-    const char* netTypeToString(NetType type)
+const char* netTypeToString(
+    NetType type)
+{
+    switch (type)
     {
-        switch (type)
-        {
-            case NetType::Signal:
-                return "SIGNAL";
+    case NetType::Signal:
+        return "SIGNAL";
 
-            case NetType::VDD:
-                return "VDD";
+    case NetType::VDD:
+        return "VDD";
 
-            case NetType::VSS:
-                return "VSS";
-        }
-
-        return "UNKNOWN";
+    case NetType::VSS:
+        return "VSS";
     }
 
-    NetType netTypeFromString(
-        const std::string& value)
-    {
-        if (value == "SIGNAL")
-            return NetType::Signal;
-
-        if (value == "VDD")
-            return NetType::VDD;
-
-        if (value == "VSS")
-            return NetType::VSS;
-
-        throw std::runtime_error(
-            "Unknown NetType: " + value);
-    }
-
-    const char* factorioWireToString(
-        FactorioWire wire)
-    {
-        switch (wire)
-        {
-            case FactorioWire::None:
-                return "NONE";
-
-            case FactorioWire::Red:
-                return "RW";
-
-            case FactorioWire::Green:
-                return "GW";
-        }
-
-        return "UNKNOWN";
-    }
-
-    FactorioWire factorioWireFromString(
-        const std::string& value)
-    {
-        if (value == "NONE")
-            return FactorioWire::None;
-
-        if (value == "RW")
-            return FactorioWire::Red;
-
-        if (value == "GW")
-            return FactorioWire::Green;
-
-        throw std::runtime_error(
-            "Unknown FactorioWire: " + value);
-    }
+    return "UNKNOWN";
 }
+
+NetType netTypeFromString(
+    const std::string& value)
+{
+    if (value == "SIGNAL")
+        return NetType::Signal;
+
+    if (value == "VDD")
+        return NetType::VDD;
+
+    if (value == "VSS")
+        return NetType::VSS;
+
+    throw std::runtime_error("Unknown NetType: " + value);
+}
+
+const char* factorioWireToString(
+    FactorioWire wire)
+{
+    switch (wire)
+    {
+    case FactorioWire::None:
+        return "NONE";
+
+    case FactorioWire::Red:
+        return "RW";
+
+    case FactorioWire::Green:
+        return "GW";
+    }
+
+    return "UNKNOWN";
+}
+
+FactorioWire factorioWireFromString(
+    const std::string& value)
+{
+    if (value == "NONE")
+        return FactorioWire::None;
+
+    if (value == "RW")
+        return FactorioWire::Red;
+
+    if (value == "GW")
+        return FactorioWire::Green;
+
+    throw std::runtime_error("Unknown FactorioWire: " + value);
+}
+} // namespace
 
 bool saveRoute(
     const RouteModel& model,
@@ -89,93 +88,53 @@ bool saveRoute(
     {
         json root;
 
-        root["format"] =
-            "ManhattanRouter";
+        root["format"] = "ManhattanRouter";
 
         root["version"] = 1;
 
-        root["grid"] =
-        {
-            {"width", model.width},
-            {"height", model.height},
-            {"layers", model.layers}
-        };
+        root["grid"] = {{"width", model.width},
+                        {"height", model.height},
+                        {"layers", model.layers}};
 
-        root["wires"] =
-            json::array();
+        root["wires"] = json::array();
 
         for (const Wire& wire : model.wires)
         {
-            json points =
-                json::array();
+            json points = json::array();
 
-            for (const Point& p :
-                 wire.path.points)
+            for (const Point& p : wire.path.points)
             {
-                points.push_back(
-                {
-                    p.x,
-                    p.y,
-                    p.z
-                });
+                points.push_back({p.x, p.y, p.z});
             }
 
             json wireJson;
 
-            wireJson["name"] =
-                std::string(
-                    1,
-                    wire.name);
+            wireJson["name"] = std::string(1, wire.name);
 
-            wireJson["netName"] =
-                wire.netName;
+            wireJson["netName"] = wire.netName;
 
-            wireJson["netType"] =
-                netTypeToString(
-                    wire.netType);
+            wireJson["netType"] = netTypeToString(wire.netType);
 
-            wireJson["factorioWire"] =
-                factorioWireToString(
-                    wire.factorioWire);
+            wireJson["factorioWire"] = factorioWireToString(wire.factorioWire);
 
-            wireJson["path"] =
-            {
-                {
-                    "totalCost",
-                    wire.path.totalCost
-                },
-                {
-                    "turns",
-                    wire.path.turns
-                },
-                {
-                    "layerChanges",
-                    wire.path.layerChanges
-                },
-                {
-                    "points",
-                    points
-                }
-            };
+            wireJson["path"] = {{"totalCost", wire.path.totalCost},
+                                {"turns", wire.path.turns},
+                                {"layerChanges", wire.path.layerChanges},
+                                {"points", points}};
 
-            root["wires"].push_back(
-                wireJson);
+            root["wires"].push_back(wireJson);
         }
 
         std::ofstream file(filename);
 
         if (!file)
         {
-            error =
-                "Cannot create file: "
-                + filename;
+            error = "Cannot create file: " + filename;
 
             return false;
         }
 
-        file
-            << root.dump(4)
-            << '\n';
+        file << root.dump(4) << '\n';
 
         return true;
     }
@@ -198,9 +157,7 @@ bool loadRoute(
 
         if (!file)
         {
-            error =
-                "Cannot open file: "
-                + filename;
+            error = "Cannot open file: " + filename;
 
             return false;
         }
@@ -209,130 +166,81 @@ bool loadRoute(
 
         file >> root;
 
-        if (root.at("format")
-                .get<std::string>()
-            != "ManhattanRouter")
+        if (root.at("format").get<std::string>() != "ManhattanRouter")
         {
-            throw std::runtime_error(
-                "Unsupported file format.");
+            throw std::runtime_error("Unsupported file format.");
         }
 
-        const int version =
-            root.at("version")
-                .get<int>();
+        const int version = root.at("version").get<int>();
 
         if (version != 1)
         {
-            throw std::runtime_error(
-                "Unsupported file version.");
+            throw std::runtime_error("Unsupported file version.");
         }
 
         RouteModel loadedModel;
 
-        loadedModel.width =
-            root.at("grid")
-                .at("width")
-                .get<int>();
+        loadedModel.width = root.at("grid").at("width").get<int>();
 
-        loadedModel.height =
-            root.at("grid")
-                .at("height")
-                .get<int>();
+        loadedModel.height = root.at("grid").at("height").get<int>();
 
-        loadedModel.layers =
-            root.at("grid")
-                .at("layers")
-                .get<int>();
+        loadedModel.layers = root.at("grid").at("layers").get<int>();
 
-        if (loadedModel.width <= 0 ||
-            loadedModel.height <= 0 ||
+        if (loadedModel.width <= 0 || loadedModel.height <= 0 ||
             loadedModel.layers <= 0)
         {
-            throw std::runtime_error(
-                "Invalid grid dimensions.");
+            throw std::runtime_error("Invalid grid dimensions.");
         }
 
-        for (const json& wireJson :
-             root.at("wires"))
+        for (const json& wireJson : root.at("wires"))
         {
             Wire wire;
 
-            const std::string name =
-                wireJson.at("name")
-                    .get<std::string>();
+            const std::string name = wireJson.at("name").get<std::string>();
 
             if (name.empty())
             {
-                throw std::runtime_error(
-                    "Wire has empty name.");
+                throw std::runtime_error("Wire has empty name.");
             }
 
-            wire.name =
-                name.front();
+            wire.name = name.front();
 
-            wire.netName =
-                wireJson.at("netName")
-                    .get<std::string>();
+            wire.netName = wireJson.at("netName").get<std::string>();
 
             wire.netType =
-                netTypeFromString(
-                    wireJson.at("netType")
-                        .get<std::string>());
+                netTypeFromString(wireJson.at("netType").get<std::string>());
 
-            wire.factorioWire =
-                factorioWireFromString(
-                    wireJson.at("factorioWire")
-                        .get<std::string>());
+            wire.factorioWire = factorioWireFromString(
+                wireJson.at("factorioWire").get<std::string>());
 
-            const json& pathJson =
-                wireJson.at("path");
+            const json& pathJson = wireJson.at("path");
 
-            wire.path.totalCost =
-                pathJson.at("totalCost")
-                    .get<int>();
+            wire.path.totalCost = pathJson.at("totalCost").get<int>();
 
-            wire.path.turns =
-                pathJson.at("turns")
-                    .get<int>();
+            wire.path.turns = pathJson.at("turns").get<int>();
 
-            wire.path.layerChanges =
-                pathJson.at("layerChanges")
-                    .get<int>();
+            wire.path.layerChanges = pathJson.at("layerChanges").get<int>();
 
-            for (const json& pointJson :
-                 pathJson.at("points"))
+            for (const json& pointJson : pathJson.at("points"))
             {
-                if (!pointJson.is_array() ||
-                    pointJson.size() != 3)
+                if (!pointJson.is_array() || pointJson.size() != 3)
                 {
-                    throw std::runtime_error(
-                        "Invalid point.");
+                    throw std::runtime_error("Invalid point.");
                 }
 
-                wire.path.points.push_back(
-                    Point{
-                        pointJson.at(0)
-                            .get<int>(),
+                wire.path.points.push_back(Point{pointJson.at(0).get<int>(),
 
-                        pointJson.at(1)
-                            .get<int>(),
+                                                 pointJson.at(1).get<int>(),
 
-                        pointJson.at(2)
-                            .get<int>()
-                    });
+                                                 pointJson.at(2).get<int>()});
             }
 
-            wire.segments =
-                buildSegments(
-                    wire.path);
+            wire.segments = buildSegments(wire.path);
 
-            loadedModel.addWire(
-                wire);
+            loadedModel.addWire(wire);
         }
 
-        model =
-            std::move(
-                loadedModel);
+        model = std::move(loadedModel);
 
         return true;
     }
