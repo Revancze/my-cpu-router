@@ -104,7 +104,7 @@ const Component* ComponentModel::findComponent(
 
 
 Net* ComponentModel::findNet(
-    const std::string& name)
+    const NetId& name)
 {
     for (Net& net : nets)
     {
@@ -119,7 +119,7 @@ Net* ComponentModel::findNet(
 
 
 const Net* ComponentModel::findNet(
-    const std::string& name) const
+    const NetId& name) const
 {
     for (const Net& net : nets)
     {

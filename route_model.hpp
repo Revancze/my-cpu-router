@@ -1,8 +1,8 @@
 #pragma once
 
+#include "net_id.hpp"
 #include "segment.hpp"
 
-#include <string>
 #include <vector>
 
 enum class NetType
@@ -23,7 +23,7 @@ struct Wire
 {
     char name{};
 
-    std::string netName;
+    NetId netName;
 
     NetType netType{
         NetType::Signal

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "net_id.hpp"
 #include "router.hpp"
 
 #include <string>
@@ -55,7 +56,7 @@ struct NetConnection
 
 struct Net
 {
-    std::string name;
+    NetId name;
 
     std::vector<NetConnection> connections;
 
@@ -87,8 +88,8 @@ struct ComponentModel
         const std::string& id) const;
 
     Net* findNet(
-        const std::string& name);
+        const NetId& name);
 
     const Net* findNet(
-        const std::string& name) const;
+        const NetId& name) const;
 };
