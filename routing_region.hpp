@@ -6,22 +6,6 @@
 #include <cstddef>
 #include <memory>
 
-struct RegionBounds
-{
-    int minX{};
-    int minY{};
-    int minZ{};
-
-    int maxX{};
-    int maxY{};
-    int maxZ{};
-
-    bool contains(Point p) const;
-
-    int width() const;
-    int height() const;
-    int layers() const;
-};
 
 class RoutingRegion
 {

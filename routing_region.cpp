@@ -1,26 +1,5 @@
 #include "routing_region.hpp"
 
-bool RegionBounds::contains(
-    Point p) const
-{
-    return p.x >= minX && p.x < maxX && p.y >= minY && p.y < maxY &&
-           p.z >= minZ && p.z < maxZ;
-}
-
-int RegionBounds::width() const
-{
-    return maxX - minX;
-}
-
-int RegionBounds::height() const
-{
-    return maxY - minY;
-}
-
-int RegionBounds::layers() const
-{
-    return maxZ - minZ;
-}
 
 RoutingRegion::RoutingRegion(
     RegionBounds bounds,
