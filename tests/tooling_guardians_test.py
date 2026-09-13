@@ -105,8 +105,17 @@ fi
             text=True,
         )
 
-    def git_state(self) -> tuple[str, str, str, str]:
+    def git_state(self) -> tuple[str, ...]:
         commands = (
+            ("rev-parse", "--verify", "HEAD"),
+            ("symbolic-ref", "-q", "HEAD"),
+            (
+                "for-each-ref",
+                "--format=%(refname) %(objectname)",
+                "refs/heads",
+                "refs/remotes",
+                "refs/stash",
+            ),
             ("status", "--porcelain=v2", "--branch", "--untracked-files=all"),
             ("ls-files", "--stage"),
             ("diff", "--cached", "--binary"),
@@ -123,6 +132,17 @@ class GuardianAuthorityTest(unittest.TestCase):
         self.fixture = RepositoryFixture()
         self.addCleanup(self.fixture.close)
 
+    def test_statusman_preserves_clean_repository_state(self) -> None:
+        self.fixture.write(self.fixture.root / "tracked.txt", "committed\n")
+        self.fixture.commit_all()
+
+        state_before = self.fixture.git_state()
+        result = self.fixture.run_tool("statusman")
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("Working tree clean.", result.stdout)
+        self.assertEqual(self.fixture.git_state(), state_before)
+
     def test_statusman_preserves_mixed_repository_state(self) -> None:
         tracked = self.fixture.root / "tracked.txt"
         self.fixture.write(tracked, "committed\n")
@@ -138,6 +158,58 @@ class GuardianAuthorityTest(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("STATUSMAN", result.stdout)
+        self.assertEqual(self.fixture.git_state(), state_before)
+
+    def test_statusman_reports_staged_rename_and_deletion_without_changes(self) -> None:
+        original = self.fixture.root / "original.txt"
+        deleted = self.fixture.root / "deleted.txt"
+        self.fixture.write(original, "rename me\n")
+        self.fixture.write(deleted, "delete me\n")
+        self.fixture.commit_all()
+
+        self.fixture.git("mv", "original.txt", "renamed.txt")
+        self.fixture.git("rm", "deleted.txt")
+
+        state_before = self.fixture.git_state()
+        result = self.fixture.run_tool("statusman")
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("original.txt", result.stdout)
+        self.assertIn("renamed.txt", result.stdout)
+        self.assertIn("deleted.txt", result.stdout)
+        self.assertEqual(self.fixture.git_state(), state_before)
+
+    def test_statusman_reports_conflict_without_resolving_it(self) -> None:
+        conflicted = self.fixture.root / "conflicted.txt"
+        self.fixture.write(conflicted, "base\n")
+        self.fixture.commit_all()
+
+        self.fixture.git("switch", "-c", "other")
+        self.fixture.write(conflicted, "other\n")
+        self.fixture.git("add", "conflicted.txt")
+        self.fixture.git("commit", "-m", "other change")
+
+        self.fixture.git("switch", "main")
+        self.fixture.write(conflicted, "main\n")
+        self.fixture.git("add", "conflicted.txt")
+        self.fixture.git("commit", "-m", "main change")
+
+        merge = subprocess.run(
+            ["git", "merge", "other"],
+            cwd=self.fixture.root,
+            env=self.fixture.environment,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertNotEqual(merge.returncode, 0)
+
+        state_before = self.fixture.git_state()
+        result = self.fixture.run_tool("statusman")
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertRegex(result.stdout, r"✖\s+conflicted\.txt")
+        self.assertIn("Repository needs attention", result.stdout)
         self.assertEqual(self.fixture.git_state(), state_before)
 
     def test_mrproper_changes_worktree_but_preserves_index(self) -> None:
@@ -190,6 +262,22 @@ class GuardianAuthorityTest(unittest.TestCase):
 
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("INTEGRITY VIOLATION", result.stdout)
+
+    @unittest.skipUnless(shutil.which("g++"), "g++ is required")
+    def test_ironman_reports_failing_test_without_changing_repository(self) -> None:
+        self.fixture.write(
+            self.fixture.root / "tests" / "failing_test.cpp",
+            "int main() { return 7; }\n",
+        )
+        self.fixture.commit_all()
+
+        state_before = self.fixture.git_state()
+        result = self.fixture.run_tool("ironman")
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("failing_test · test failed", result.stdout)
+        self.assertIn("VERIFICATION FAILED", result.stdout)
+        self.assertEqual(self.fixture.git_state(), state_before)
 
     @unittest.skipUnless(shutil.which("g++"), "g++ is required")
     def test_doorman_verifies_staged_snapshot_not_unstaged_content(self) -> None:
