@@ -47,7 +47,7 @@ if [ "$SNAPSHOT_MODE" != "1" ]; then
 fi
 
 printf '\n'
-if VERIFY_EMBEDDED=1 sh "$ROOT_DIR/tools/verify.sh"; then
+if VERIFY_EMBEDDED=1 bash "$ROOT_DIR/tools/verify.sh"; then
     VERIFY_RESULT=0
 else
     VERIFY_RESULT=$?
