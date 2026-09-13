@@ -1563,6 +1563,45 @@ then
 fi
 
 # ============================================================
+# MACHINE-READABLE SNAPSHOT
+# ============================================================
+
+if [ "${1:-}" = "--json" ]
+then
+    shift
+    JSON_SCOPE="worktree"
+
+    if [ "${1:-}" = "--staged" ]
+    then
+        JSON_SCOPE="staged"
+        shift
+    fi
+
+    if [ "$#" -ne 0 ]
+    then
+        printf 'STATUSMAN ERROR: --json accepts only the optional --staged flag.\n' >&2
+        exit 1
+    fi
+
+    if command -v python >/dev/null 2>&1
+    then
+        PYTHON=python
+    elif command -v python3 >/dev/null 2>&1
+    then
+        PYTHON=python3
+    else
+        printf 'STATUSMAN ERROR: Python was not found in PATH.\n' >&2
+        exit 1
+    fi
+
+    PYTHONDONTWRITEBYTECODE=1 \
+        PYTHONPATH="$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}" \
+        exec "$PYTHON" -m tools.codelaxy.snapshot_cli \
+            --repository "$ROOT_DIR" \
+            --scope "$JSON_SCOPE"
+fi
+
+# ============================================================
 # TEMPORARY SNAPSHOT FILES
 # ============================================================
 
