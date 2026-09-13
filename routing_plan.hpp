@@ -30,6 +30,25 @@ enum class RoutingDirection
 };
 
 // ============================================================
+// ROUTING DECISION
+// ============================================================
+
+enum class RoutingDecision
+{
+    Unconstrained,
+    Preferred,
+    Required,
+    Forbidden,
+    Conflict
+};
+
+struct RoutingDecisionResult
+{
+    RoutingDecision decision{RoutingDecision::Unconstrained};
+    RoutingDirection direction{RoutingDirection::Any};
+};
+
+// ============================================================
 // ROUTING CORRIDOR
 // ============================================================
 
@@ -78,6 +97,56 @@ class RoutingPlan
         return nullptr;
     }
 
+    RoutingDecisionResult evaluate(
+        Point point) const
+    {
+        Candidate required;
+        Candidate preferred;
+
+        for (const RoutingCorridor& corridor : corridors_)
+        {
+            if (!corridor.bounds.contains(point))
+            {
+                continue;
+            }
+
+            if (corridor.policy == RoutingPolicy::Forbidden)
+            {
+                return {RoutingDecision::Forbidden, RoutingDirection::Any};
+            }
+
+            if (corridor.policy == RoutingPolicy::Required)
+            {
+                consider(required, corridor);
+                continue;
+            }
+
+            consider(preferred, corridor);
+        }
+
+        if (required.found)
+        {
+            if (required.conflict)
+            {
+                return {RoutingDecision::Conflict, RoutingDirection::Any};
+            }
+
+            return {RoutingDecision::Required, required.direction};
+        }
+
+        if (preferred.found)
+        {
+            if (preferred.conflict)
+            {
+                return {RoutingDecision::Conflict, RoutingDirection::Any};
+            }
+
+            return {RoutingDecision::Preferred, preferred.direction};
+        }
+
+        return {};
+    }
+
     const std::vector<RoutingCorridor>& corridors() const
     {
         return corridors_;
@@ -94,5 +163,68 @@ class RoutingPlan
     }
 
   private:
+    struct Candidate
+    {
+        bool found{};
+        bool conflict{};
+
+        int priority{};
+
+        RoutingDirection direction{RoutingDirection::Any};
+    };
+
+    static bool directionsConflict(
+        RoutingDirection lhs,
+        RoutingDirection rhs)
+    {
+        return lhs != RoutingDirection::Any && rhs != RoutingDirection::Any &&
+               lhs != rhs;
+    }
+
+    static RoutingDirection mergeDirections(
+        RoutingDirection lhs,
+        RoutingDirection rhs)
+    {
+        if (lhs == RoutingDirection::Any)
+        {
+            return rhs;
+        }
+
+        if (rhs == RoutingDirection::Any)
+        {
+            return lhs;
+        }
+
+        return lhs;
+    }
+
+    static void consider(
+        Candidate& candidate,
+        const RoutingCorridor& corridor)
+    {
+        if (!candidate.found || corridor.priority > candidate.priority)
+        {
+            candidate.found = true;
+            candidate.conflict = false;
+            candidate.priority = corridor.priority;
+            candidate.direction = corridor.direction;
+            return;
+        }
+
+        if (corridor.priority < candidate.priority)
+        {
+            return;
+        }
+
+        if (directionsConflict(candidate.direction, corridor.direction))
+        {
+            candidate.conflict = true;
+            return;
+        }
+
+        candidate.direction =
+            mergeDirections(candidate.direction, corridor.direction);
+    }
+
     std::vector<RoutingCorridor> corridors_;
 };
