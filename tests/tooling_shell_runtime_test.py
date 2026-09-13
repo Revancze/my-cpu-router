@@ -42,7 +42,9 @@ class ToolingShellRuntimeTest(unittest.TestCase):
                 self.assertNotIn('exec sh "$TARGET" "$@"', content)
 
     def test_statusman_launcher_ignores_an_incompatible_sh(self) -> None:
-        if shutil.which("bash") is None:
+        bash = shutil.which("bash")
+
+        if bash is None:
             self.skipTest("bash is required")
 
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -52,6 +54,7 @@ class ToolingShellRuntimeTest(unittest.TestCase):
             fake_bin.mkdir()
 
             shutil.copytree(ROOT / "tools", repository / "tools")
+
             self.run_git(repository, "init", "-b", "main")
             self.run_git(repository, "config", "user.name", "Codelaxy Test")
             self.run_git(
@@ -79,8 +82,12 @@ class ToolingShellRuntimeTest(unittest.TestCase):
             )
 
             status_before = self.git_status(repository)
+
             result = subprocess.run(
-                [str(repository / "tools" / "bin" / "statusman")],
+                [
+                    bash,
+                    (repository / "tools" / "bin" / "statusman").as_posix(),
+                ],
                 cwd=repository,
                 env=environment,
                 check=False,
@@ -88,9 +95,16 @@ class ToolingShellRuntimeTest(unittest.TestCase):
                 text=True,
             )
 
-            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual(
+                result.returncode,
+                0,
+                result.stdout + result.stderr,
+            )
             self.assertIn("STATUSMAN", result.stdout)
-            self.assertEqual(self.git_status(repository), status_before)
+            self.assertEqual(
+                self.git_status(repository),
+                status_before,
+            )
 
     def git_status(self, repository: Path) -> str:
         result = subprocess.run(
@@ -105,10 +119,12 @@ class ToolingShellRuntimeTest(unittest.TestCase):
             capture_output=True,
             text=True,
         )
+
         return result.stdout
 
     def run_git(self, repository: Path, *arguments: str) -> None:
         repository.mkdir(parents=True, exist_ok=True)
+
         subprocess.run(
             ["git", *arguments],
             cwd=repository,
