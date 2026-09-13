@@ -1,6 +1,8 @@
 build/
 *.exe
 *.o
+__pycache__/
+*.py[cod]
 
 # Blender / exporty
 *.obj

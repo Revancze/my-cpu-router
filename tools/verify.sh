@@ -115,7 +115,9 @@ if [ -s "$PYTHON_TEST_LIST" ]; then
 
         : > "$RUN_LOG"
 
-        if ! "$PYTHON" "$PYTHON_TEST_FILE" > "$RUN_LOG" 2>&1; then
+        if ! PYTHONDONTWRITEBYTECODE=1 \
+            PYTHONPATH="$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}" \
+            "$PYTHON" "$PYTHON_TEST_FILE" > "$RUN_LOG" 2>&1; then
             ui_fail "$PYTHON_TEST_NAME · test failed"
             if [ -s "$RUN_LOG" ]; then
                 printf '\n'
