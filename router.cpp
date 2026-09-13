@@ -1,5 +1,6 @@
 #include "router.hpp"
 
+#include "routing_plan.hpp"
 #include <algorithm>
 #include <array>
 #include <limits>
@@ -183,7 +184,7 @@ Path Router::findPath(
     Point start,
     Point end) const
 {
-    return findPathImpl(start, end, nullptr);
+    return findPathImpl(start, end, nullptr, nullptr);
 }
 
 Path Router::findPath(
@@ -191,13 +192,31 @@ Path Router::findPath(
     Point end,
     const NetId& netId) const
 {
-    return findPathImpl(start, end, &netId);
+    return findPathImpl(start, end, &netId, nullptr);
+}
+
+Path Router::findPath(
+    Point start,
+    Point end,
+    const RoutingPlan& plan) const
+{
+    return findPathImpl(start, end, nullptr, &plan);
+}
+
+Path Router::findPath(
+    Point start,
+    Point end,
+    const NetId& netId,
+    const RoutingPlan& plan) const
+{
+    return findPathImpl(start, end, &netId, &plan);
 }
 
 Path Router::findPathImpl(
     Point start,
     Point end,
-    const NetId* netId) const
+    const NetId* netId,
+    const RoutingPlan* plan) const
 {
     Path result;
 
@@ -209,7 +228,26 @@ Path Router::findPathImpl(
         return isBlocked(p, *netId);
     };
 
-    if (!isInside(start) || !isInside(end) || blocked(start) || blocked(end))
+    const auto routingDecision = [plan](Point p)
+    {
+        if (plan == nullptr)
+        {
+            return RoutingDecisionResult{};
+        }
+
+        return plan->evaluate(p);
+    };
+
+    const auto hardBlocked = [&routingDecision](Point p)
+    {
+        const RoutingDecisionResult decision = routingDecision(p);
+
+        return decision.decision == RoutingDecision::Forbidden ||
+               decision.decision == RoutingDecision::Conflict;
+    };
+
+    if (!isInside(start) || !isInside(end) || blocked(start) || blocked(end) ||
+        hardBlocked(start) || hardBlocked(end))
     {
         return result;
     }
@@ -271,6 +309,38 @@ Path Router::findPathImpl(
 
             if (blocked(next))
                 continue;
+
+            if (hardBlocked(next))
+                continue;
+
+            if (plan != nullptr)
+            {
+                const Point currentPoint{current.x, current.y, current.z};
+
+                const RoutingDecisionResult currentDecision =
+                    routingDecision(currentPoint);
+
+                const RoutingDecisionResult nextDecision =
+                    routingDecision(next);
+
+                if (currentDecision.decision == RoutingDecision::Required &&
+                    nextDecision.decision == RoutingDecision::Required &&
+                    currentDecision.direction == nextDecision.direction)
+                {
+                    if (nextDecision.direction ==
+                            RoutingDirection::Horizontal &&
+                        nextDir != DIR_RIGHT && nextDir != DIR_LEFT)
+                    {
+                        continue;
+                    }
+
+                    if (nextDecision.direction == RoutingDirection::Vertical &&
+                        nextDir != DIR_DOWN && nextDir != DIR_UP)
+                    {
+                        continue;
+                    }
+                }
+            }
 
             int stepCost = 1;
 
