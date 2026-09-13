@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 set -u
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
@@ -106,7 +106,7 @@ if [ ! -f "$FORMAT_LOG" ]; then
     deny 1
 fi
 
-if ! FORMAT_ROOT="$SNAPSHOT_DIR" FORMAT_CHECK_QUIET=1 sh "$SNAPSHOT_DIR/tools/format-check.sh" > "$FORMAT_LOG" 2>&1; then
+if ! FORMAT_ROOT="$SNAPSHOT_DIR" FORMAT_CHECK_QUIET=1 bash "$SNAPSHOT_DIR/tools/format-check.sh" > "$FORMAT_LOG" 2>&1; then
     ui_fail "clang-format check failed."
     [ ! -s "$FORMAT_LOG" ] || cat "$FORMAT_LOG"
     deny 1
@@ -119,7 +119,7 @@ if [ ! -f "$SNAPSHOT_DIR/tools/ironman.sh" ]; then
 fi
 
 printf '\n'
-if ! IRONMAN_ROOT="$SNAPSHOT_DIR" IRONMAN_SNAPSHOT_MODE=1 IRONMAN_EMBEDDED=1 sh "$SNAPSHOT_DIR/tools/ironman.sh"; then
+if ! IRONMAN_ROOT="$SNAPSHOT_DIR" IRONMAN_SNAPSHOT_MODE=1 IRONMAN_EMBEDDED=1 bash "$SNAPSHOT_DIR/tools/ironman.sh"; then
     printf '\n'
     ui_fail "IronMan rejected the staged snapshot."
     deny 1

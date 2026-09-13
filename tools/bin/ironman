@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 
 set -u
 
@@ -16,4 +16,4 @@ then
     exit 1
 fi
 
-exec sh "$TARGET" "$@"
+exec bash "$TARGET" "$@"

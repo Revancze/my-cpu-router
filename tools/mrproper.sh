@@ -9,7 +9,7 @@ cd "$ROOT_DIR" || exit 1
 ui_tool_header "MRPROPER" "WORKTREE CLEANUP" "format · whitespace · EOF" "$UI_CYAN" "$UI_GREEN"
 
 ui_section "FORMAT"
-if ! sh "$ROOT_DIR/tools/format.sh" --changed; then
+if ! bash "$ROOT_DIR/tools/format.sh" --changed; then
     ui_footer_fail "CLEANUP FAILED"
     exit 1
 fi

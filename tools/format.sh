@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 set -u
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
@@ -15,7 +15,7 @@ MODE=${1:-changed}
 case "$MODE" in
     changed|--changed) MODE=changed ;;
     all|--all) MODE=all ;;
-    *) ui_fail "Usage: sh tools/format.sh [--changed|--all]"; exit 1 ;;
+    *) ui_fail "Usage: bash tools/format.sh [--changed|--all]"; exit 1 ;;
 esac
 
 FILE_LIST=$(mktemp)

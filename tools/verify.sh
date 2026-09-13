@@ -28,19 +28,22 @@ BUILD_DIR="build/tests"
 mkdir -p "$BUILD_DIR"
 
 TEST_LIST=$(mktemp)
+PYTHON_TEST_LIST=$(mktemp)
 BUILD_LOG=$(mktemp)
 RUN_LOG=$(mktemp)
 
-if [ ! -f "$TEST_LIST" ] || [ ! -f "$BUILD_LOG" ] || [ ! -f "$RUN_LOG" ]; then
+if [ ! -f "$TEST_LIST" ] || [ ! -f "$PYTHON_TEST_LIST" ] ||
+   [ ! -f "$BUILD_LOG" ] || [ ! -f "$RUN_LOG" ]; then
     ui_fail "Could not create temporary verification files."
-    rm -f "$TEST_LIST" "$BUILD_LOG" "$RUN_LOG"
+    rm -f "$TEST_LIST" "$PYTHON_TEST_LIST" "$BUILD_LOG" "$RUN_LOG"
     exit 1
 fi
 
-cleanup() { rm -f "$TEST_LIST" "$BUILD_LOG" "$RUN_LOG"; }
+cleanup() { rm -f "$TEST_LIST" "$PYTHON_TEST_LIST" "$BUILD_LOG" "$RUN_LOG"; }
 trap cleanup 0
 
 find tests -type f -name '*_test.cpp' -print | sort > "$TEST_LIST"
+find tests -type f -name '*_test.py' -print | sort > "$PYTHON_TEST_LIST"
 
 if [ ! -s "$TEST_LIST" ]; then
     ui_fail "No *_test.cpp files were found."
@@ -89,5 +92,48 @@ done < "$TEST_LIST"
 
 printf '\n'
 ui_ok "$TEST_COUNT / $TEST_COUNT tests passed"
+
+if [ -s "$PYTHON_TEST_LIST" ]; then
+    if command -v python >/dev/null 2>&1; then
+        PYTHON=python
+    elif command -v python3 >/dev/null 2>&1; then
+        PYTHON=python3
+    else
+        ui_fail "Python was not found in PATH."
+        [ "$EMBEDDED" = "1" ] || ui_footer_fail "VERIFICATION FAILED"
+        exit 1
+    fi
+
+    printf '\n'
+    ui_section "TOOLING TESTS"
+    PYTHON_TEST_COUNT=0
+
+    while IFS= read -r PYTHON_TEST_FILE
+    do
+        PYTHON_TEST_COUNT=$((PYTHON_TEST_COUNT + 1))
+        PYTHON_TEST_NAME=$(basename "$PYTHON_TEST_FILE" .py)
+
+        : > "$RUN_LOG"
+
+        if ! PYTHONDONTWRITEBYTECODE=1 \
+            PYTHONPATH="$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}" \
+            "$PYTHON" "$PYTHON_TEST_FILE" > "$RUN_LOG" 2>&1; then
+            ui_fail "$PYTHON_TEST_NAME · test failed"
+            if [ -s "$RUN_LOG" ]; then
+                printf '\n'
+                ui_section "TEST OUTPUT"
+                cat "$RUN_LOG"
+            fi
+            [ "$EMBEDDED" = "1" ] || ui_footer_fail "VERIFICATION FAILED"
+            exit 1
+        fi
+
+        ui_ok "$PYTHON_TEST_NAME"
+    done < "$PYTHON_TEST_LIST"
+
+    printf '\n'
+    ui_ok "$PYTHON_TEST_COUNT / $PYTHON_TEST_COUNT tooling tests passed"
+fi
+
 [ "$EMBEDDED" = "1" ] || ui_footer_ok "VERIFICATION COMPLETE"
 exit 0
