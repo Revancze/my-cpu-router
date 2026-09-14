@@ -2,6 +2,7 @@
 
 from .contracts import (
     SCHEMA_VERSION,
+    Change,
     ContractError,
     Plan,
     Receipt,
@@ -9,9 +10,11 @@ from .contracts import (
     Verdict,
 )
 from .protocol import decode_record, encode_record
+from .git_snapshot import GitSnapshotError, observe_snapshot
 
 __all__ = (
     "SCHEMA_VERSION",
+    "Change",
     "ContractError",
     "Plan",
     "Receipt",
@@ -19,4 +22,6 @@ __all__ = (
     "Verdict",
     "decode_record",
     "encode_record",
+    "GitSnapshotError",
+    "observe_snapshot",
 )
