@@ -29,6 +29,8 @@ struct Path
     }
 };
 
+class RoutingPlan;
+
 class Router
 {
   public:
@@ -42,6 +44,13 @@ class Router
     void addObstacle(Point p);
 
     Path findPath(Point start, Point end) const;
+
+    Path findPath(Point start, Point end, const RoutingPlan& plan) const;
+
+    Path findPath(Point start,
+                  Point end,
+                  const NetId& netId,
+                  const RoutingPlan& plan) const;
 
     Path findPath(Point start, Point end, const NetId& netId) const;
 
@@ -65,7 +74,10 @@ class Router
         std::optional<NetId> owner;
     };
 
-    Path findPathImpl(Point start, Point end, const NetId* netId) const;
+    Path findPathImpl(Point start,
+                      Point end,
+                      const NetId* netId,
+                      const RoutingPlan* plan) const;
 
     int width_;
     int height_;
