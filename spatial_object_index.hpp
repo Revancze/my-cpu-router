@@ -4,7 +4,11 @@
 
 #include <cstddef>
 #include <string>
+#include <unordered_map>
 #include <vector>
+
+class RoutingRegion;
+class SpatialHierarchy;
 
 struct SpatialObjectRecord
 {
@@ -15,6 +19,10 @@ struct SpatialObjectRecord
 class SpatialObjectIndex
 {
   public:
+    SpatialObjectIndex() = default;
+
+    explicit SpatialObjectIndex(SpatialHierarchy& hierarchy);
+
     bool insert(const std::string& id, RegionBounds bounds);
 
     bool remove(const std::string& id);
@@ -34,5 +42,14 @@ class SpatialObjectIndex
     std::size_t size() const;
 
   private:
+    SpatialHierarchy* hierarchy_{nullptr};
+
+    std::unordered_map<std::string, std::size_t> recordIndex_;
+
+    std::unordered_map<std::string, const RoutingRegion*> objectRegions_;
+
     std::vector<SpatialObjectRecord> records_;
+
+    std::unordered_map<const RoutingRegion*, std::vector<std::string>>
+        regionObjects_;
 };

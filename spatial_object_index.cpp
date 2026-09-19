@@ -1,5 +1,8 @@
 #include "spatial_object_index.hpp"
 
+#include "routing_region.hpp"
+#include "spatial_hierarchy.hpp"
+
 #include <algorithm>
 
 namespace
@@ -20,16 +23,115 @@ bool intersectsBounds(
     return a.minX < b.maxX && a.maxX > b.minX && a.minY < b.maxY &&
            a.maxY > b.minY && a.minZ < b.maxZ && a.maxZ > b.minZ;
 }
+
+RoutingRegion* findStorageRegion(
+    SpatialHierarchy& hierarchy,
+    const RegionBounds& bounds)
+{
+    RoutingRegion* region = &hierarchy.root();
+
+    if (!containsBounds(region->bounds(), bounds))
+        return nullptr;
+
+    while (region->depth() < hierarchy.maxDepth() && region->canSubdivide())
+    {
+        if (region->isLeaf())
+        {
+            if (!region->subdivide())
+                break;
+        }
+
+        RoutingRegion* containingChild = nullptr;
+
+        for (std::size_t i = 0; i < 4; ++i)
+        {
+            RoutingRegion* child = region->child(i);
+
+            if (child != nullptr && containsBounds(child->bounds(), bounds))
+            {
+                containingChild = child;
+                break;
+            }
+        }
+
+        // The object crosses a child boundary.
+        // Store it in the current parent region.
+        if (containingChild == nullptr)
+            break;
+
+        region = containingChild;
+    }
+
+    return region;
+}
+
+void collectCandidateIds(
+    const RoutingRegion& region,
+    const RegionBounds& queryBounds,
+    const std::unordered_map<const RoutingRegion*, std::vector<std::string>>&
+        regionObjects,
+    std::vector<std::string>& result)
+{
+    if (!intersectsBounds(region.bounds(), queryBounds))
+    {
+        return;
+    }
+
+    const auto bucket = regionObjects.find(&region);
+
+    if (bucket != regionObjects.end())
+    {
+        result.insert(result.end(),
+                      bucket->second.begin(),
+                      bucket->second.end());
+    }
+
+    for (std::size_t i = 0; i < 4; ++i)
+    {
+        const RoutingRegion* child = region.child(i);
+
+        if (child != nullptr)
+        {
+            collectCandidateIds(*child, queryBounds, regionObjects, result);
+        }
+    }
+}
 } // namespace
+
+SpatialObjectIndex::SpatialObjectIndex(
+    SpatialHierarchy& hierarchy)
+    : hierarchy_(&hierarchy)
+{
+}
 
 bool SpatialObjectIndex::insert(
     const std::string& id,
     RegionBounds bounds)
 {
-    if (find(id) != nullptr)
+    if (recordIndex_.find(id) != recordIndex_.end())
         return false;
 
+    RoutingRegion* storageRegion = nullptr;
+
+    if (hierarchy_ != nullptr)
+    {
+        storageRegion = findStorageRegion(*hierarchy_, bounds);
+
+        if (storageRegion == nullptr)
+            return false;
+    }
+
+    const std::size_t index = records_.size();
+
     records_.push_back(SpatialObjectRecord{id, bounds});
+
+    recordIndex_[id] = index;
+
+    if (storageRegion != nullptr)
+    {
+        regionObjects_[storageRegion].push_back(id);
+        objectRegions_[id] = storageRegion;
+    }
 
     return true;
 }
@@ -37,17 +139,45 @@ bool SpatialObjectIndex::insert(
 bool SpatialObjectIndex::remove(
     const std::string& id)
 {
-    const auto it = std::find_if(records_.begin(),
-                                 records_.end(),
-                                 [&id](const SpatialObjectRecord& record)
-                                 {
-                                     return record.id == id;
-                                 });
+    const auto indexEntry = recordIndex_.find(id);
 
-    if (it == records_.end())
+    if (indexEntry == recordIndex_.end())
         return false;
 
-    records_.erase(it);
+    const std::size_t removedIndex = indexEntry->second;
+
+    const auto regionEntry = objectRegions_.find(id);
+
+    if (regionEntry != objectRegions_.end())
+    {
+        const RoutingRegion* region = regionEntry->second;
+
+        const auto bucketEntry = regionObjects_.find(region);
+
+        if (bucketEntry != regionObjects_.end())
+        {
+            std::vector<std::string>& ids = bucketEntry->second;
+
+            ids.erase(std::remove(ids.begin(), ids.end(), id), ids.end());
+
+            if (ids.empty())
+            {
+                regionObjects_.erase(bucketEntry);
+            }
+        }
+
+        objectRegions_.erase(regionEntry);
+    }
+
+    records_.erase(records_.begin() +
+                   static_cast<std::ptrdiff_t>(removedIndex));
+
+    recordIndex_.erase(indexEntry);
+
+    for (std::size_t i = removedIndex; i < records_.size(); ++i)
+    {
+        recordIndex_[records_[i].id] = i;
+    }
 
     return true;
 }
@@ -55,33 +185,23 @@ bool SpatialObjectIndex::remove(
 SpatialObjectRecord* SpatialObjectIndex::find(
     const std::string& id)
 {
-    const auto it = std::find_if(records_.begin(),
-                                 records_.end(),
-                                 [&id](const SpatialObjectRecord& record)
-                                 {
-                                     return record.id == id;
-                                 });
+    const auto it = recordIndex_.find(id);
 
-    if (it == records_.end())
+    if (it == recordIndex_.end())
         return nullptr;
 
-    return &(*it);
+    return &records_[it->second];
 }
 
 const SpatialObjectRecord* SpatialObjectIndex::find(
     const std::string& id) const
 {
-    const auto it = std::find_if(records_.begin(),
-                                 records_.end(),
-                                 [&id](const SpatialObjectRecord& record)
-                                 {
-                                     return record.id == id;
-                                 });
+    const auto it = recordIndex_.find(id);
 
-    if (it == records_.end())
+    if (it == recordIndex_.end())
         return nullptr;
 
-    return &(*it);
+    return &records_[it->second];
 }
 
 std::vector<std::string> SpatialObjectIndex::queryInside(
@@ -89,11 +209,30 @@ std::vector<std::string> SpatialObjectIndex::queryInside(
 {
     std::vector<std::string> result;
 
-    for (const SpatialObjectRecord& record : records_)
+    if (hierarchy_ == nullptr)
     {
-        if (containsBounds(bounds, record.bounds))
+        for (const SpatialObjectRecord& record : records_)
         {
-            result.push_back(record.id);
+            if (containsBounds(bounds, record.bounds))
+            {
+                result.push_back(record.id);
+            }
+        }
+
+        return result;
+    }
+
+    std::vector<std::string> candidates;
+
+    collectCandidateIds(hierarchy_->root(), bounds, regionObjects_, candidates);
+
+    for (const std::string& id : candidates)
+    {
+        const SpatialObjectRecord* record = find(id);
+
+        if (record != nullptr && containsBounds(bounds, record->bounds))
+        {
+            result.push_back(id);
         }
     }
 
@@ -105,11 +244,30 @@ std::vector<std::string> SpatialObjectIndex::queryIntersecting(
 {
     std::vector<std::string> result;
 
-    for (const SpatialObjectRecord& record : records_)
+    if (hierarchy_ == nullptr)
     {
-        if (intersectsBounds(bounds, record.bounds))
+        for (const SpatialObjectRecord& record : records_)
         {
-            result.push_back(record.id);
+            if (intersectsBounds(bounds, record.bounds))
+            {
+                result.push_back(record.id);
+            }
+        }
+
+        return result;
+    }
+
+    std::vector<std::string> candidates;
+
+    collectCandidateIds(hierarchy_->root(), bounds, regionObjects_, candidates);
+
+    for (const std::string& id : candidates)
+    {
+        const SpatialObjectRecord* record = find(id);
+
+        if (record != nullptr && intersectsBounds(bounds, record->bounds))
+        {
+            result.push_back(id);
         }
     }
 
@@ -119,6 +277,9 @@ std::vector<std::string> SpatialObjectIndex::queryIntersecting(
 void SpatialObjectIndex::clear()
 {
     records_.clear();
+    recordIndex_.clear();
+    regionObjects_.clear();
+    objectRegions_.clear();
 }
 
 bool SpatialObjectIndex::empty() const
