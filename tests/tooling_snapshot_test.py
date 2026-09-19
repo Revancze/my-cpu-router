@@ -111,7 +111,10 @@ class GitSnapshotTest(unittest.TestCase):
         worktree_after = observe_snapshot(self.repository.root, "worktree")
 
         self.assertEqual(staged_after, staged_before)
-        self.assertNotEqual(worktree_after.snapshot_id, worktree_before.snapshot_id)
+        self.assertNotEqual(
+            worktree_after.snapshot_id,
+            worktree_before.snapshot_id,
+        )
         self.assertEqual(staged_after.changed_files, ("tracked.txt",))
         self.assertIsNone(staged_after.worktree_fingerprint)
 
@@ -130,7 +133,10 @@ class GitSnapshotTest(unittest.TestCase):
         changes = {change.path: change for change in snapshot.changes}
 
         self.assertEqual(changes["renamed.txt"].kind, "rename")
-        self.assertEqual(changes["renamed.txt"].original_path, "original.txt")
+        self.assertEqual(
+            changes["renamed.txt"].original_path,
+            "original.txt",
+        )
         self.assertEqual(changes["renamed.txt"].index_status, "R")
         self.assertEqual(changes["deleted.txt"].index_status, "D")
         self.assertEqual(changes["modified.txt"].worktree_status, "M")
@@ -157,21 +163,30 @@ class GitSnapshotTest(unittest.TestCase):
         self.assertEqual(snapshot.changes[0].kind, "unmerged")
         self.assertEqual(self.repository.state(), state_before)
 
-    def test_worktree_content_changes_fingerprint_when_status_is_unchanged(self) -> None:
+    def test_worktree_content_changes_fingerprint_when_status_is_unchanged(
+        self,
+    ) -> None:
         self.repository.write("tracked.txt", "committed\n")
         self.repository.commit_all()
 
         self.repository.write("tracked.txt", "first modification\n")
         first = observe_snapshot(self.repository.root, "worktree")
+
         self.repository.write("tracked.txt", "second modification\n")
         second = observe_snapshot(self.repository.root, "worktree")
 
         self.assertEqual(first.changes, second.changes)
-        self.assertNotEqual(first.worktree_fingerprint, second.worktree_fingerprint)
+        self.assertNotEqual(
+            first.worktree_fingerprint,
+            second.worktree_fingerprint,
+        )
         self.assertNotEqual(first.snapshot_id, second.snapshot_id)
 
     def test_invalid_scope_and_non_repository_are_rejected(self) -> None:
-        with self.assertRaisesRegex(GitSnapshotError, "invalid snapshot scope"):
+        with self.assertRaisesRegex(
+            GitSnapshotError,
+            "invalid snapshot scope",
+        ):
             observe_snapshot(self.repository.root, "galaxy")
 
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -179,20 +194,33 @@ class GitSnapshotTest(unittest.TestCase):
                 observe_snapshot(temporary_directory, "worktree")
 
     @unittest.skipUnless(shutil.which("bash"), "bash is required")
-    def test_statusman_json_matches_engine_and_preserves_repository(self) -> None:
+    def test_statusman_json_matches_engine_and_preserves_repository(
+        self,
+    ) -> None:
         shutil.copytree(ROOT / "tools", self.repository.root / "tools")
         self.repository.write("tracked.txt", "committed\n")
         self.repository.commit_all()
+
         self.repository.write("tracked.txt", "staged\n")
         self.repository.git("add", "tracked.txt")
         self.repository.write("tracked.txt", "unstaged\n")
         self.repository.write("untracked.txt", "untracked\n")
 
         state_before = self.repository.state()
+
+        bash = shutil.which("bash")
+        if bash is None:
+            self.skipTest("bash is required")
+
         result = subprocess.run(
             [
-                "bash",
-                str(self.repository.root / "tools" / "bin" / "statusman"),
+                bash,
+                (
+                    self.repository.root
+                    / "tools"
+                    / "bin"
+                    / "statusman"
+                ).as_posix(),
                 "--json",
                 "--staged",
             ],
@@ -203,7 +231,11 @@ class GitSnapshotTest(unittest.TestCase):
             text=True,
         )
 
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(
+            result.returncode,
+            0,
+            result.stdout + result.stderr,
+        )
         self.assertEqual(result.stderr, "")
         self.assertEqual(
             decode_record(result.stdout),
