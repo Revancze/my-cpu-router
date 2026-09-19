@@ -271,7 +271,17 @@ the complete CPU layout.
 
 # R2 — RoutingPlan
 
-Status: NEXT
+Status: IN PROGRESS
+
+Implemented foundation:
+
+- RoutingPlan,
+- RoutingCorridor,
+- Preferred / Required / Forbidden policies,
+- direction constraints,
+- corridor priorities and conflict detection,
+- router enforcement of hard constraints,
+- Preferred direction routing cost.
 
 RoutingPlan represents routing intent.
 
@@ -350,7 +360,19 @@ and the generated route geometry.
 
 # R3 — Spatial object index
 
-Status: PLANNED
+Status: IN PROGRESS
+
+Implemented foundation:
+
+- stable opaque object IDs,
+- RegionBounds records,
+- insert / remove / find operations,
+- inside and intersection queries,
+- half-open bounds semantics,
+- optional SpatialHierarchy acceleration,
+- deepest containing-region storage,
+- parent-region storage for cross-boundary objects,
+- hierarchy-pruned candidate queries.
 
 The hierarchy must eventually index objects occupying routing space.
 
