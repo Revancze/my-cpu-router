@@ -366,6 +366,49 @@ int main()
 
     assert(hierarchicalIndex.size() == 3);
 
+    // --------------------------------------------------------
+    // NET OCCUPANCY
+    // --------------------------------------------------------
+
+    SpatialObjectIndex netIndex;
+
+    assert(netIndex.insert("wire:DATA_A:0",
+                           RegionBounds{1, 1, 0, 4, 2, 1},
+                           SpatialObjectKind::WireSegment,
+                           NetId{"DATA_A"}));
+
+    assert(netIndex.insert("wire:DATA_A:1",
+                           RegionBounds{5, 1, 0, 8, 2, 1},
+                           SpatialObjectKind::WireSegment,
+                           NetId{"DATA_A"}));
+
+    assert(netIndex.insert("wire:DATA_B:0",
+                           RegionBounds{2, 3, 0, 6, 4, 1},
+                           SpatialObjectKind::WireSegment,
+                           NetId{"DATA_B"}));
+
+    // Anonymous spatial object must not belong to either net.
+    assert(netIndex.insert("obstacle:ANON",
+                           RegionBounds{2, 1, 0, 3, 2, 1},
+                           SpatialObjectKind::Obstacle));
+
+    const std::vector<std::string> dataAOccupancy =
+        netIndex.queryNetOccupancy(RegionBounds{0, 0, 0, 6, 4, 1},
+                                   NetId{"DATA_A"});
+
+    assert(containsId(dataAOccupancy, "wire:DATA_A:0"));
+    assert(containsId(dataAOccupancy, "wire:DATA_A:1"));
+
+    assert(!containsId(dataAOccupancy, "wire:DATA_B:0"));
+    assert(!containsId(dataAOccupancy, "obstacle:ANON"));
+
+    const std::vector<std::string> dataBOccupancy =
+        netIndex.queryNetOccupancy(RegionBounds{0, 0, 0, 6, 4, 1},
+                                   NetId{"DATA_B"});
+
+    assert(containsId(dataBOccupancy, "wire:DATA_B:0"));
+    assert(!containsId(dataBOccupancy, "wire:DATA_A:0"));
+
     std::cout << "spatial_object_index test: PASS\n";
 
     return 0;

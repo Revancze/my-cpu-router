@@ -1,7 +1,9 @@
 #pragma once
 
 #include "geometry.hpp"
+#include "net_id.hpp"
 
+#include <optional>
 #include <cstddef>
 #include <string>
 #include <unordered_map>
@@ -27,6 +29,7 @@ struct SpatialObjectRecord
     std::string id;
     RegionBounds bounds;
     SpatialObjectKind kind{SpatialObjectKind::Unknown};
+    std::optional<NetId> netId;
 };
 
 class SpatialObjectIndex
@@ -38,7 +41,8 @@ class SpatialObjectIndex
 
     bool insert(const std::string& id,
                 RegionBounds bounds,
-                SpatialObjectKind kind = SpatialObjectKind::Unknown);
+                SpatialObjectKind kind = SpatialObjectKind::Unknown,
+                std::optional<NetId> netId = std::nullopt);
 
     bool remove(const std::string& id);
 
@@ -52,6 +56,9 @@ class SpatialObjectIndex
 
     std::vector<std::string> queryIntersecting(RegionBounds bounds,
                                                SpatialObjectKind kind) const;
+
+    std::vector<std::string> queryNetOccupancy(RegionBounds bounds,
+                                               const NetId& netId) const;
 
     const SpatialObjectRecord* findNearest(Point point,
                                            SpatialObjectKind kind) const;

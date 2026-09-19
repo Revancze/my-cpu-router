@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <limits>
 #include <queue>
+#include <utility>
 
 namespace
 {
@@ -165,7 +166,8 @@ SpatialObjectIndex::SpatialObjectIndex(
 bool SpatialObjectIndex::insert(
     const std::string& id,
     RegionBounds bounds,
-    SpatialObjectKind kind)
+    SpatialObjectKind kind,
+    std::optional<NetId> netId)
 {
     if (recordIndex_.find(id) != recordIndex_.end())
         return false;
@@ -182,7 +184,7 @@ bool SpatialObjectIndex::insert(
 
     const std::size_t index = records_.size();
 
-    records_.push_back(SpatialObjectRecord{id, bounds, kind});
+    records_.push_back(SpatialObjectRecord{id, bounds, kind, std::move(netId)});
 
     recordIndex_[id] = index;
 
@@ -346,6 +348,28 @@ std::vector<std::string> SpatialObjectIndex::queryIntersecting(
         const SpatialObjectRecord* record = find(id);
 
         if (record != nullptr && record->kind == kind)
+        {
+            result.push_back(id);
+        }
+    }
+
+    return result;
+}
+
+std::vector<std::string> SpatialObjectIndex::queryNetOccupancy(
+    RegionBounds bounds,
+    const NetId& netId) const
+{
+    std::vector<std::string> result;
+
+    const std::vector<std::string> candidates = queryIntersecting(bounds);
+
+    for (const std::string& id : candidates)
+    {
+        const SpatialObjectRecord* record = find(id);
+
+        if (record != nullptr && record->netId.has_value() &&
+            record->netId.value() == netId)
         {
             result.push_back(id);
         }
