@@ -30,11 +30,15 @@ int main()
 
     const RegionBounds obstacleBounds{25, 5, 0, 35, 15, 1};
 
-    assert(index.insert("pin:A", pinBounds));
+    assert(index.insert("pin:A", pinBounds, SpatialObjectKind::Pin));
 
-    assert(index.insert("wire:DATA:0", wireBounds));
+    assert(index.insert("wire:DATA:0",
+                        wireBounds,
+                        SpatialObjectKind::WireSegment));
 
-    assert(index.insert("obstacle:BLOCK_A", obstacleBounds));
+    assert(index.insert("obstacle:BLOCK_A",
+                        obstacleBounds,
+                        SpatialObjectKind::Obstacle));
 
     assert(index.size() == 3);
     assert(!index.empty());
@@ -48,6 +52,7 @@ int main()
     assert(pin->id == "pin:A");
     assert(pin->bounds.minX == 10);
     assert(pin->bounds.maxX == 11);
+    assert(pin->kind == SpatialObjectKind::Pin);
 
     assert(index.find("missing") == nullptr);
 
@@ -77,6 +82,20 @@ int main()
     assert(containsId(intersecting, "wire:DATA:0"));
 
     assert(containsId(intersecting, "obstacle:BLOCK_A"));
+
+    // --------------------------------------------------------
+    // OBJECT KIND FILTERING
+    // --------------------------------------------------------
+
+    const std::vector<std::string> obstacles =
+        index.queryIntersecting(RegionBounds{20, 0, 0, 40, 20, 1},
+                                SpatialObjectKind::Obstacle);
+
+    assert(containsId(obstacles, "obstacle:BLOCK_A"));
+
+    assert(!containsId(obstacles, "wire:DATA:0"));
+
+    assert(!containsId(obstacles, "pin:A"));
 
     // --------------------------------------------------------
     // HALF-OPEN BOUNDS
@@ -117,6 +136,12 @@ int main()
     SpatialObjectIndex hierarchicalIndex(hierarchy);
 
     assert(hierarchicalIndex.insert("leaf:NW", RegionBounds{1, 1, 0, 2, 2, 1}));
+
+    const SpatialObjectRecord* legacyObject = hierarchicalIndex.find("leaf:NW");
+
+    assert(legacyObject != nullptr);
+
+    assert(legacyObject->kind == SpatialObjectKind::Unknown);
 
     assert(hierarchicalIndex.insert("leaf:SE",
                                     RegionBounds{12, 12, 0, 13, 13, 1}));

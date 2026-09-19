@@ -106,7 +106,8 @@ SpatialObjectIndex::SpatialObjectIndex(
 
 bool SpatialObjectIndex::insert(
     const std::string& id,
-    RegionBounds bounds)
+    RegionBounds bounds,
+    SpatialObjectKind kind)
 {
     if (recordIndex_.find(id) != recordIndex_.end())
         return false;
@@ -123,7 +124,7 @@ bool SpatialObjectIndex::insert(
 
     const std::size_t index = records_.size();
 
-    records_.push_back(SpatialObjectRecord{id, bounds});
+    records_.push_back(SpatialObjectRecord{id, bounds, kind});
 
     recordIndex_[id] = index;
 
@@ -266,6 +267,27 @@ std::vector<std::string> SpatialObjectIndex::queryIntersecting(
         const SpatialObjectRecord* record = find(id);
 
         if (record != nullptr && intersectsBounds(bounds, record->bounds))
+        {
+            result.push_back(id);
+        }
+    }
+
+    return result;
+}
+
+std::vector<std::string> SpatialObjectIndex::queryIntersecting(
+    RegionBounds bounds,
+    SpatialObjectKind kind) const
+{
+    std::vector<std::string> result;
+
+    const std::vector<std::string> candidates = queryIntersecting(bounds);
+
+    for (const std::string& id : candidates)
+    {
+        const SpatialObjectRecord* record = find(id);
+
+        if (record != nullptr && record->kind == kind)
         {
             result.push_back(id);
         }
