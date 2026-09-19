@@ -188,6 +188,59 @@ int main()
     assert(hierarchyNearest->id == "obstacle:NEAR");
 
     // --------------------------------------------------------
+    // HIERARCHY NEAREST TIE ACROSS BRANCHES
+    // --------------------------------------------------------
+
+    SpatialHierarchy tieHierarchy(RegionBounds{0, 0, 0, 16, 16, 2}, 2);
+
+    SpatialObjectIndex hierarchicalTie(tieHierarchy);
+
+    // Insert Z first in the western branch.
+    // Distance from (7,7,0) = 1.
+    assert(hierarchicalTie.insert("obstacle:Z",
+                                  RegionBounds{6, 7, 0, 7, 8, 1},
+                                  SpatialObjectKind::Obstacle));
+
+    // Same distance, but in the eastern branch.
+    // Lexicographically smaller ID must win even if another
+    // hierarchy branch already produced the same best distance.
+    assert(hierarchicalTie.insert("obstacle:A",
+                                  RegionBounds{8, 7, 0, 9, 8, 1},
+                                  SpatialObjectKind::Obstacle));
+
+    const SpatialObjectRecord* hierarchyTieResult =
+        hierarchicalTie.findNearest(Point{7, 7, 0},
+                                    SpatialObjectKind::Obstacle);
+
+    assert(hierarchyTieResult != nullptr);
+    assert(hierarchyTieResult->id == "obstacle:A");
+
+    // --------------------------------------------------------
+    // HIERARCHY NEAREST PARENT-STORED OBJECT
+    // --------------------------------------------------------
+
+    SpatialHierarchy parentHierarchy(RegionBounds{0, 0, 0, 16, 16, 2}, 2);
+
+    SpatialObjectIndex parentNearest(parentHierarchy);
+
+    // Crosses the x=8 and y=8 child boundaries,
+    // therefore it must remain stored in the parent region.
+    assert(parentNearest.insert("obstacle:CROSS",
+                                RegionBounds{7, 7, 0, 9, 9, 1},
+                                SpatialObjectKind::Obstacle));
+
+    // Stored deep in a child branch.
+    assert(parentNearest.insert("obstacle:FAR",
+                                RegionBounds{14, 14, 0, 15, 15, 1},
+                                SpatialObjectKind::Obstacle));
+
+    const SpatialObjectRecord* parentStoredNearest =
+        parentNearest.findNearest(Point{8, 8, 0}, SpatialObjectKind::Obstacle);
+
+    assert(parentStoredNearest != nullptr);
+    assert(parentStoredNearest->id == "obstacle:CROSS");
+
+    // --------------------------------------------------------
     // HALF-OPEN BOUNDS
     // --------------------------------------------------------
 
