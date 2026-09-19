@@ -10,10 +10,23 @@
 class RoutingRegion;
 class SpatialHierarchy;
 
+enum class SpatialObjectKind
+{
+    Unknown,
+    Pin,
+    WireSegment,
+    Via,
+    ComponentBody,
+    Obstacle,
+    KeepOut,
+    RoutingCorridor
+};
+
 struct SpatialObjectRecord
 {
     std::string id;
     RegionBounds bounds;
+    SpatialObjectKind kind{SpatialObjectKind::Unknown};
 };
 
 class SpatialObjectIndex
@@ -23,7 +36,9 @@ class SpatialObjectIndex
 
     explicit SpatialObjectIndex(SpatialHierarchy& hierarchy);
 
-    bool insert(const std::string& id, RegionBounds bounds);
+    bool insert(const std::string& id,
+                RegionBounds bounds,
+                SpatialObjectKind kind = SpatialObjectKind::Unknown);
 
     bool remove(const std::string& id);
 
@@ -34,6 +49,9 @@ class SpatialObjectIndex
     std::vector<std::string> queryInside(RegionBounds bounds) const;
 
     std::vector<std::string> queryIntersecting(RegionBounds bounds) const;
+
+    std::vector<std::string> queryIntersecting(RegionBounds bounds,
+                                               SpatialObjectKind kind) const;
 
     void clear();
 
