@@ -59,10 +59,12 @@ Router::Router(
     int layers,
     int turnPenalty,
     int layerChangePenalty,
-    int upperLayerStepPenalty)
+    int upperLayerStepPenalty,
+    int preferredDirectionPenalty)
     : width_(width), height_(height), layers_(layers),
       turnPenalty_(turnPenalty), layerChangePenalty_(layerChangePenalty),
       upperLayerStepPenalty_(upperLayerStepPenalty),
+      preferredDirectionPenalty_(std::max(0, preferredDirectionPenalty)),
       obstacles_(
           layers,
           std::vector<std::vector<bool>>(height,
@@ -313,6 +315,8 @@ Path Router::findPathImpl(
             if (hardBlocked(next))
                 continue;
 
+            int preferredPenalty = 0;
+
             if (plan != nullptr)
             {
                 const Point currentPoint{current.x, current.y, current.z};
@@ -340,9 +344,28 @@ Path Router::findPathImpl(
                         continue;
                     }
                 }
+
+                if (currentDecision.decision == RoutingDecision::Preferred &&
+                    nextDecision.decision == RoutingDecision::Preferred &&
+                    currentDecision.direction == nextDecision.direction &&
+                    isPlanarDirection(nextDir))
+                {
+                    if (nextDecision.direction ==
+                            RoutingDirection::Horizontal &&
+                        nextDir != DIR_RIGHT && nextDir != DIR_LEFT)
+                    {
+                        preferredPenalty = preferredDirectionPenalty_;
+                    }
+
+                    if (nextDecision.direction == RoutingDirection::Vertical &&
+                        nextDir != DIR_DOWN && nextDir != DIR_UP)
+                    {
+                        preferredPenalty = preferredDirectionPenalty_;
+                    }
+                }
             }
 
-            int stepCost = 1;
+            int stepCost = 1 + preferredPenalty;
 
             // Pohyb mezi vrstvami.
             if (nextDir == DIR_Z_UP || nextDir == DIR_Z_DOWN)
