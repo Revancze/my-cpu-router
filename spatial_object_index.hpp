@@ -53,6 +53,9 @@ class SpatialObjectIndex
     std::vector<std::string> queryIntersecting(RegionBounds bounds,
                                                SpatialObjectKind kind) const;
 
+    const SpatialObjectRecord* findNearest(Point point,
+                                           SpatialObjectKind kind) const;
+
     void clear();
 
     bool empty() const;

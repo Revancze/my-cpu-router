@@ -98,6 +98,96 @@ int main()
     assert(!containsId(obstacles, "pin:A"));
 
     // --------------------------------------------------------
+    // NEAREST OBJECT BY KIND
+    // --------------------------------------------------------
+
+    SpatialObjectIndex nearestIndex;
+
+    // Closer object, but wrong kind: must be ignored.
+    assert(nearestIndex.insert("pin:NEAR",
+                               RegionBounds{1, 0, 0, 2, 1, 1},
+                               SpatialObjectKind::Pin));
+
+    // Manhattan distance from (0,0,0) = 5.
+    assert(nearestIndex.insert("obstacle:AXIS",
+                               RegionBounds{5, 0, 0, 6, 1, 1},
+                               SpatialObjectKind::Obstacle));
+
+    // Manhattan distance from (0,0,0) = 6.
+    // Euclidean distance would be smaller than AXIS,
+    // so this proves that nearest uses grid Manhattan distance.
+    assert(nearestIndex.insert("obstacle:DIAGONAL",
+                               RegionBounds{3, 3, 0, 4, 4, 1},
+                               SpatialObjectKind::Obstacle));
+
+    const SpatialObjectRecord* nearestObstacle =
+        nearestIndex.findNearest(Point{0, 0, 0}, SpatialObjectKind::Obstacle);
+
+    assert(nearestObstacle != nullptr);
+    assert(nearestObstacle->id == "obstacle:AXIS");
+
+    // A point inside an object has distance zero.
+    const SpatialObjectRecord* containingObstacle =
+        nearestIndex.findNearest(Point{5, 0, 0}, SpatialObjectKind::Obstacle);
+
+    assert(containingObstacle != nullptr);
+    assert(containingObstacle->id == "obstacle:AXIS");
+
+    // No object of the requested kind.
+    assert(nearestIndex.findNearest(Point{0, 0, 0}, SpatialObjectKind::Via) ==
+           nullptr);
+
+    // --------------------------------------------------------
+    // DETERMINISTIC TIE BREAK
+    // --------------------------------------------------------
+
+    SpatialObjectIndex tieIndex;
+
+    assert(tieIndex.insert("obstacle:Z",
+                           RegionBounds{1, 0, 0, 2, 1, 1},
+                           SpatialObjectKind::Obstacle));
+
+    assert(tieIndex.insert("obstacle:A",
+                           RegionBounds{0, 1, 0, 1, 2, 1},
+                           SpatialObjectKind::Obstacle));
+
+    const SpatialObjectRecord* tied =
+        tieIndex.findNearest(Point{0, 0, 0}, SpatialObjectKind::Obstacle);
+
+    assert(tied != nullptr);
+
+    // Equal distance must have deterministic behavior
+    // independent of insertion or hierarchy traversal order.
+    assert(tied->id == "obstacle:A");
+
+    // --------------------------------------------------------
+    // HIERARCHY-BACKED NEAREST OBJECT
+    // --------------------------------------------------------
+
+    SpatialHierarchy nearestHierarchy(RegionBounds{0, 0, 0, 16, 16, 2}, 2);
+
+    SpatialObjectIndex hierarchicalNearest(nearestHierarchy);
+
+    assert(hierarchicalNearest.insert("pin:CLOSE",
+                                      RegionBounds{1, 1, 0, 2, 2, 1},
+                                      SpatialObjectKind::Pin));
+
+    assert(hierarchicalNearest.insert("obstacle:NEAR",
+                                      RegionBounds{2, 2, 0, 3, 3, 1},
+                                      SpatialObjectKind::Obstacle));
+
+    assert(hierarchicalNearest.insert("obstacle:FAR",
+                                      RegionBounds{12, 12, 0, 13, 13, 1},
+                                      SpatialObjectKind::Obstacle));
+
+    const SpatialObjectRecord* hierarchyNearest =
+        hierarchicalNearest.findNearest(Point{0, 0, 0},
+                                        SpatialObjectKind::Obstacle);
+
+    assert(hierarchyNearest != nullptr);
+    assert(hierarchyNearest->id == "obstacle:NEAR");
+
+    // --------------------------------------------------------
     // HALF-OPEN BOUNDS
     // --------------------------------------------------------
 

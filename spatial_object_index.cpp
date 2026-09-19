@@ -4,6 +4,7 @@
 #include "spatial_hierarchy.hpp"
 
 #include <algorithm>
+#include <limits>
 
 namespace
 {
@@ -14,6 +15,26 @@ bool containsBounds(
     return inner.minX >= outer.minX && inner.minY >= outer.minY &&
            inner.minZ >= outer.minZ && inner.maxX <= outer.maxX &&
            inner.maxY <= outer.maxY && inner.maxZ <= outer.maxZ;
+}
+
+long long distanceToBounds(
+    Point point,
+    const RegionBounds& bounds)
+{
+    const auto axisDistance = [](int coordinate, int min, int max)
+    {
+        if (coordinate < min)
+            return static_cast<long long>(min) - coordinate;
+
+        if (coordinate >= max)
+            return static_cast<long long>(coordinate) - (max - 1);
+
+        return 0LL;
+    };
+
+    return axisDistance(point.x, bounds.minX, bounds.maxX) +
+           axisDistance(point.y, bounds.minY, bounds.maxY) +
+           axisDistance(point.z, bounds.minZ, bounds.maxZ);
 }
 
 bool intersectsBounds(
@@ -294,6 +315,32 @@ std::vector<std::string> SpatialObjectIndex::queryIntersecting(
     }
 
     return result;
+}
+
+const SpatialObjectRecord* SpatialObjectIndex::findNearest(
+    Point point,
+    SpatialObjectKind kind) const
+{
+    const SpatialObjectRecord* best = nullptr;
+
+    long long bestDistance = std::numeric_limits<long long>::max();
+
+    for (const SpatialObjectRecord& record : records_)
+    {
+        if (record.kind != kind)
+            continue;
+
+        const long long distance = distanceToBounds(point, record.bounds);
+
+        if (best == nullptr || distance < bestDistance ||
+            (distance == bestDistance && record.id < best->id))
+        {
+            best = &record;
+            bestDistance = distance;
+        }
+    }
+
+    return best;
 }
 
 void SpatialObjectIndex::clear()
