@@ -39,7 +39,8 @@ class Router
            int layers,
            int turnPenalty = 3,
            int layerChangePenalty = 2,
-           int upperLayerStepPenalty = 1);
+           int upperLayerStepPenalty = 1,
+           int preferredDirectionPenalty = 1);
 
     void addObstacle(Point p);
 
@@ -86,6 +87,7 @@ class Router
     int turnPenalty_;
     int layerChangePenalty_;
     int upperLayerStepPenalty_;
+    int preferredDirectionPenalty_;
 
     std::vector<std::vector<std::vector<bool>>> obstacles_;
 
