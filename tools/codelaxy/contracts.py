@@ -6,10 +6,14 @@ from dataclasses import dataclass
 from typing import ClassVar, Mapping
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 VALID_SCOPES = frozenset({"staged", "worktree"})
 VALID_PRODUCERS = frozenset({"ironman", "mrproper"})
 VALID_RECEIPT_STATUSES = frozenset({"fail", "pass"})
+VALID_CHANGE_KINDS = frozenset(
+    {"copy", "ordinary", "rename", "unmerged", "untracked"}
+)
+VALID_GIT_STATUSES = frozenset({".", "?", "A", "C", "D", "M", "R", "T", "U"})
 
 
 class ContractError(ValueError):
@@ -42,6 +46,30 @@ def _decoded_text_tuple(field_name: str, value: object) -> tuple[str, ...]:
     if not isinstance(value, list):
         raise ContractError(f"{field_name} must be a JSON array")
     return _text_tuple(field_name, tuple(value))
+
+
+def _change_tuple(field_name: str, value: object) -> tuple[Change, ...]:
+    if not isinstance(value, tuple):
+        raise ContractError(f"{field_name} must be an immutable tuple")
+    if not all(isinstance(item, Change) for item in value):
+        raise ContractError(f"{field_name} must contain Change records")
+
+    result = tuple(value)
+    paths = tuple(change.path for change in result)
+    if len(paths) != len(set(paths)):
+        raise ContractError(f"{field_name} must not contain duplicate paths")
+    return result
+
+
+def _decoded_changes(field_name: str, value: object) -> tuple[Change, ...]:
+    if not isinstance(value, list):
+        raise ContractError(f"{field_name} must be a JSON array")
+    if not all(isinstance(item, Mapping) for item in value):
+        raise ContractError(f"{field_name} must contain JSON objects")
+    return _change_tuple(
+        field_name,
+        tuple(Change.from_dict(item) for item in value),
+    )
 
 
 def _fingerprint(field_name: str, value: object) -> str:
@@ -85,6 +113,81 @@ def _record_payload(
 
 
 @dataclass(frozen=True, slots=True)
+class Change:
+    """One path and its exact index/worktree state from Git porcelain v2."""
+
+    path: str
+    kind: str
+    index_status: str
+    worktree_status: str
+    original_path: str | None = None
+
+    def __post_init__(self) -> None:
+        _require_text("path", self.path)
+        if self.kind not in VALID_CHANGE_KINDS:
+            raise ContractError(f"invalid change kind: {self.kind!r}")
+        if self.index_status not in VALID_GIT_STATUSES:
+            raise ContractError(f"invalid index status: {self.index_status!r}")
+        if self.worktree_status not in VALID_GIT_STATUSES:
+            raise ContractError(f"invalid worktree status: {self.worktree_status!r}")
+        _optional_text("original_path", self.original_path)
+
+        if self.kind == "untracked":
+            if (self.index_status, self.worktree_status) != ("?", "?"):
+                raise ContractError("untracked change must use ?? status")
+        elif "?" in {self.index_status, self.worktree_status}:
+            raise ContractError("tracked change must not use ? status")
+
+        if self.kind in {"copy", "rename"}:
+            if self.original_path is None:
+                raise ContractError(
+                    f"{self.kind} change must contain an original path"
+                )
+        elif self.original_path is not None:
+            raise ContractError(
+                f"{self.kind} change must not contain an original path"
+            )
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "path": self.path,
+            "kind": self.kind,
+            "index_status": self.index_status,
+            "worktree_status": self.worktree_status,
+            "original_path": self.original_path,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, object]) -> Change:
+        expected_fields = frozenset(
+            {
+                "path",
+                "kind",
+                "index_status",
+                "worktree_status",
+                "original_path",
+            }
+        )
+        actual_fields = frozenset(payload)
+        if actual_fields != expected_fields:
+            missing = sorted(expected_fields - actual_fields)
+            unexpected = sorted(actual_fields - expected_fields)
+            raise ContractError(
+                f"invalid change fields; missing={missing}, "
+                f"unexpected={unexpected}"
+            )
+        return cls(
+            path=_require_text("path", payload["path"]),
+            kind=_require_text("kind", payload["kind"]),
+            index_status=_require_text("index_status", payload["index_status"]),
+            worktree_status=_require_text(
+                "worktree_status", payload["worktree_status"]
+            ),
+            original_path=_optional_text("original_path", payload["original_path"]),
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class Snapshot:
     """Immutable observation of one repository scope."""
 
@@ -95,7 +198,7 @@ class Snapshot:
     head_oid: str | None
     index_fingerprint: str
     worktree_fingerprint: str | None
-    changed_files: tuple[str, ...]
+    changes: tuple[Change, ...]
     schema_version: int = SCHEMA_VERSION
 
     def __post_init__(self) -> None:
@@ -107,7 +210,11 @@ class Snapshot:
         _fingerprint("index_fingerprint", self.index_fingerprint)
         if self.worktree_fingerprint is not None:
             _fingerprint("worktree_fingerprint", self.worktree_fingerprint)
-        _text_tuple("changed_files", self.changed_files)
+        _change_tuple("changes", self.changes)
+
+    @property
+    def changed_files(self) -> tuple[str, ...]:
+        return tuple(change.path for change in self.changes)
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -118,7 +225,7 @@ class Snapshot:
             "head_oid": self.head_oid,
             "index_fingerprint": self.index_fingerprint,
             "worktree_fingerprint": self.worktree_fingerprint,
-            "changed_files": list(self.changed_files),
+            "changes": [change.to_dict() for change in self.changes],
         }
 
     @classmethod
@@ -135,7 +242,7 @@ class Snapshot:
                     "head_oid",
                     "index_fingerprint",
                     "worktree_fingerprint",
-                    "changed_files",
+                    "changes",
                 }
             ),
         )
@@ -154,9 +261,7 @@ class Snapshot:
                     "worktree_fingerprint", values["worktree_fingerprint"]
                 )
             ),
-            changed_files=_decoded_text_tuple(
-                "changed_files", values["changed_files"]
-            ),
+            changes=_decoded_changes("changes", values["changes"]),
         )
 
 

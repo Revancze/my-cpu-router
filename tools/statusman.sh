@@ -1563,16 +1563,59 @@ then
 fi
 
 # ============================================================
+# PYTHON ENGINE
+# ============================================================
+
+if command -v python >/dev/null 2>&1
+then
+    PYTHON=python
+elif command -v python3 >/dev/null 2>&1
+then
+    PYTHON=python3
+else
+    printf 'STATUSMAN ERROR: Python was not found in PATH.\n' >&2
+    exit 1
+fi
+
+# ============================================================
+# MACHINE-READABLE SNAPSHOT
+# ============================================================
+
+if [ "${1:-}" = "--json" ]
+then
+    shift
+    JSON_SCOPE="worktree"
+
+    if [ "${1:-}" = "--staged" ]
+    then
+        JSON_SCOPE="staged"
+        shift
+    fi
+
+    if [ "$#" -ne 0 ]
+    then
+        printf 'STATUSMAN ERROR: --json accepts only the optional --staged flag.\n' >&2
+        exit 1
+    fi
+
+    PYTHONDONTWRITEBYTECODE=1 \
+        PYTHONPATH="$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}" \
+        exec "$PYTHON" -m tools.codelaxy.snapshot_cli \
+            --repository "$ROOT_DIR" \
+            --scope "$JSON_SCOPE"
+fi
+
+# ============================================================
 # TEMPORARY SNAPSHOT FILES
 # ============================================================
 
-STATUS_FILE=$(mktemp 2>/dev/null)
+SNAPSHOT_FACTS_FILE=$(mktemp 2>/dev/null)
 AVAILABLE_FILES=$(mktemp 2>/dev/null)
 INSPECTION_FILES=$(mktemp 2>/dev/null)
 WARNINGS_FILE=$(mktemp 2>/dev/null)
 
-if [ -z "$STATUS_FILE" ] ||
-   [ ! -f "$STATUS_FILE" ] ||
+if [ -z "$SNAPSHOT_FACTS_FILE" ] ||
+   [ ! -f "$SNAPSHOT_FACTS_FILE" ] ||
    [ -z "$AVAILABLE_FILES" ] ||
    [ ! -f "$AVAILABLE_FILES" ] ||
    [ -z "$INSPECTION_FILES" ] ||
@@ -1583,7 +1626,7 @@ then
     printf 'STATUSMAN ERROR: could not create temporary files.\n'
 
     rm -f \
-        "$STATUS_FILE" \
+        "$SNAPSHOT_FACTS_FILE" \
         "$AVAILABLE_FILES" \
         "$INSPECTION_FILES" \
         "$WARNINGS_FILE"
@@ -1594,7 +1637,7 @@ fi
 cleanup()
 {
     rm -f \
-        "$STATUS_FILE" \
+        "$SNAPSHOT_FACTS_FILE" \
         "$AVAILABLE_FILES" \
         "$INSPECTION_FILES" \
         "$WARNINGS_FILE"
@@ -1602,13 +1645,15 @@ cleanup()
 
 trap cleanup 0
 
-if ! git status \
-    --porcelain=v2 \
-    --branch \
-    --untracked-files=all \
-    > "$STATUS_FILE"
+if ! PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH="$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}" \
+    "$PYTHON" -m tools.codelaxy.snapshot_cli \
+        --repository "$ROOT_DIR" \
+        --scope worktree \
+        --statusman-facts \
+        > "$SNAPSHOT_FACTS_FILE"
 then
-    printf 'STATUSMAN ERROR: could not inspect repository status.\n'
+    printf 'STATUSMAN ERROR: could not inspect repository snapshot.\n'
     exit 1
 fi
 
@@ -1699,10 +1744,54 @@ else
     REPOSITORY_NAME=$(basename "$ROOT_DIR")
 fi
 
-BRANCH=$(sed -n 's/^# branch.head //p' "$STATUS_FILE")
-HEAD_OID=$(sed -n 's/^# branch.oid //p' "$STATUS_FILE")
-UPSTREAM=$(sed -n 's/^# branch.upstream //p' "$STATUS_FILE")
-AB=$(sed -n 's/^# branch.ab //p' "$STATUS_FILE")
+BRANCH=$(
+    git symbolic-ref \
+        --quiet \
+        --short \
+        HEAD \
+        2>/dev/null ||
+    true
+)
+
+UPSTREAM=$(
+    git rev-parse \
+        --abbrev-ref \
+        --symbolic-full-name \
+        '@{upstream}' \
+        2>/dev/null ||
+    true
+)
+
+HEAD_OID=""
+STAGED=0
+UNSTAGED=0
+UNTRACKED=0
+CONFLICTS=0
+
+while IFS="$(printf '\t')" read -r KEY VALUE
+do
+    case "$KEY" in
+        HEAD_OID)
+            HEAD_OID=$VALUE
+            ;;
+        STAGED)
+            STAGED=$VALUE
+            ;;
+        UNSTAGED)
+            UNSTAGED=$VALUE
+            ;;
+        UNTRACKED)
+            UNTRACKED=$VALUE
+            ;;
+        CONFLICTS)
+            CONFLICTS=$VALUE
+            ;;
+        *)
+            printf 'STATUSMAN ERROR: unknown snapshot fact: %s\n' "$KEY" >&2
+            exit 1
+            ;;
+    esac
+done < "$SNAPSHOT_FACTS_FILE"
 
 SHORT_OID="unknown"
 
@@ -1714,52 +1803,27 @@ fi
 AHEAD=0
 BEHIND=0
 
-if [ -n "$AB" ]
+if [ -n "$UPSTREAM" ]
 then
-    AHEAD=$(
-        printf '%s\n' "$AB" |
-        awk '{ value = $1; sub(/^\+/, "", value); print value + 0 }'
+    DIVERGENCE=$(
+        git rev-list \
+            --left-right \
+            --count \
+            "$UPSTREAM...HEAD" \
+            2>/dev/null ||
+        printf '0\t0\n'
     )
 
     BEHIND=$(
-        printf '%s\n' "$AB" |
-        awk '{ value = $2; sub(/^-/, "", value); print value + 0 }'
+        printf '%s\n' "$DIVERGENCE" |
+        awk '{ print $1 + 0 }'
+    )
+
+    AHEAD=$(
+        printf '%s\n' "$DIVERGENCE" |
+        awk '{ print $2 + 0 }'
     )
 fi
-
-STAGED=$(
-    awk '
-    /^1 / || /^2 / {
-        if (substr($2, 1, 1) != ".")
-            count++
-    }
-    END { print count + 0 }
-    ' "$STATUS_FILE"
-)
-
-UNSTAGED=$(
-    awk '
-    /^1 / || /^2 / {
-        if (substr($2, 2, 1) != ".")
-            count++
-    }
-    END { print count + 0 }
-    ' "$STATUS_FILE"
-)
-
-UNTRACKED=$(
-    awk '
-    /^\? / { count++ }
-    END { print count + 0 }
-    ' "$STATUS_FILE"
-)
-
-CONFLICTS=$(
-    awk '
-    /^u / { count++ }
-    END { print count + 0 }
-    ' "$STATUS_FILE"
-)
 
 STASHES=$(
     git stash list |

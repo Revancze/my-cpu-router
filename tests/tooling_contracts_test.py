@@ -10,6 +10,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from tools.codelaxy import (
+    SCHEMA_VERSION,
+    Change,
     ContractError,
     Plan,
     Receipt,
@@ -33,7 +35,20 @@ class ToolingContractsTest(unittest.TestCase):
                 head_oid="0123456789abcdef",
                 index_fingerprint=FINGERPRINT_A,
                 worktree_fingerprint=None,
-                changed_files=("router.cpp", "router.hpp"),
+                changes=(
+                    Change(
+                        path="router.cpp",
+                        kind="ordinary",
+                        index_status="M",
+                        worktree_status=".",
+                    ),
+                    Change(
+                        path="router.hpp",
+                        kind="ordinary",
+                        index_status="M",
+                        worktree_status=".",
+                    ),
+                ),
             ),
             Plan(
                 snapshot_id="snapshot-1",
@@ -79,15 +94,51 @@ class ToolingContractsTest(unittest.TestCase):
                 head_oid=None,
                 index_fingerprint=FINGERPRINT_A,
                 worktree_fingerprint=None,
-                changed_files=["router.cpp"],  # type: ignore[arg-type]
+                changes=[  # type: ignore[arg-type]
+                    Change(
+                        path="router.cpp",
+                        kind="ordinary",
+                        index_status="M",
+                        worktree_status=".",
+                    )
+                ],
+            )
+
+    def test_snapshot_exposes_changed_paths_without_losing_change_state(self) -> None:
+        snapshot = self.records()[0]
+
+        self.assertEqual(snapshot.changed_files, ("router.cpp", "router.hpp"))
+        self.assertEqual(snapshot.changes[0].index_status, "M")
+
+    def test_rename_requires_its_original_path(self) -> None:
+        with self.assertRaisesRegex(ContractError, "original path"):
+            Change(
+                path="renamed.cpp",
+                kind="rename",
+                index_status="R",
+                worktree_status=".",
+            )
+
+    def test_untracked_change_requires_question_mark_status(self) -> None:
+        with self.assertRaisesRegex(ContractError, r"must use \?\? status"):
+            Change(
+                path="new.txt",
+                kind="untracked",
+                index_status=".",
+                worktree_status="M",
             )
 
     def test_invalid_schema_version_is_rejected(self) -> None:
         payload = self.records()[0].to_dict()
-        payload["schema_version"] = 999
+        for version in (1, 999):
+            with self.subTest(version=version):
+                payload["schema_version"] = version
+                with self.assertRaisesRegex(
+                    ContractError, "unsupported schema version"
+                ):
+                    Snapshot.from_dict(payload)
 
-        with self.assertRaisesRegex(ContractError, "unsupported schema version"):
-            Snapshot.from_dict(payload)
+        self.assertEqual(SCHEMA_VERSION, 2)
 
     def test_unknown_fields_are_rejected(self) -> None:
         payload = self.records()[1].to_dict()
