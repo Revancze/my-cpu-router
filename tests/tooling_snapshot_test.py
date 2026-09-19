@@ -212,36 +212,50 @@ class GitSnapshotTest(unittest.TestCase):
         if bash is None:
             self.skipTest("bash is required")
 
-        result = subprocess.run(
-            [
-                bash,
-                (
-                    self.repository.root
-                    / "tools"
-                    / "bin"
-                    / "statusman"
-                ).as_posix(),
-                "--json",
-                "--staged",
-            ],
-            cwd=self.repository.root,
-            env=self.repository.environment,
-            check=False,
-            capture_output=True,
-            text=True,
+        launcher = (
+            self.repository.root
+            / "tools"
+            / "bin"
+            / "statusman"
+        ).as_posix()
+
+        cases = (
+            ("worktree", ("--json",)),
+            ("staged", ("--json", "--staged")),
         )
 
-        self.assertEqual(
-            result.returncode,
-            0,
-            result.stdout + result.stderr,
-        )
-        self.assertEqual(result.stderr, "")
-        self.assertEqual(
-            decode_record(result.stdout),
-            observe_snapshot(self.repository.root, "staged"),
-        )
-        self.assertEqual(self.repository.state(), state_before)
+        for scope, arguments in cases:
+            with self.subTest(scope=scope):
+                result = subprocess.run(
+                    [
+                        bash,
+                        launcher,
+                        *arguments,
+                    ],
+                    cwd=self.repository.root,
+                    env=self.repository.environment,
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
+
+                self.assertEqual(
+                    result.returncode,
+                    0,
+                    result.stdout + result.stderr,
+                )
+                self.assertEqual(result.stderr, "")
+                self.assertEqual(
+                    decode_record(result.stdout),
+                    observe_snapshot(
+                        self.repository.root,
+                        scope,
+                    ),
+                )
+                self.assertEqual(
+                    self.repository.state(),
+                    state_before,
+                )
 
 
 if __name__ == "__main__":
