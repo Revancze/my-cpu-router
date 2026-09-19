@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <queue>
 
 namespace
 {
@@ -35,6 +36,42 @@ long long distanceToBounds(
     return axisDistance(point.x, bounds.minX, bounds.maxX) +
            axisDistance(point.y, bounds.minY, bounds.maxY) +
            axisDistance(point.z, bounds.minZ, bounds.maxZ);
+}
+
+struct RegionCandidate
+{
+    const RoutingRegion* region{};
+    long long distance{};
+};
+
+struct RegionCandidateGreater
+{
+    bool operator()(
+        const RegionCandidate& lhs,
+        const RegionCandidate& rhs) const
+    {
+        return lhs.distance > rhs.distance;
+    }
+};
+
+void considerNearestRecord(
+    const SpatialObjectRecord& record,
+    Point point,
+    SpatialObjectKind kind,
+    const SpatialObjectRecord*& best,
+    long long& bestDistance)
+{
+    if (record.kind != kind)
+        return;
+
+    const long long distance = distanceToBounds(point, record.bounds);
+
+    if (best == nullptr || distance < bestDistance ||
+        (distance == bestDistance && record.id < best->id))
+    {
+        best = &record;
+        bestDistance = distance;
+    }
 }
 
 bool intersectsBounds(
@@ -325,18 +362,78 @@ const SpatialObjectRecord* SpatialObjectIndex::findNearest(
 
     long long bestDistance = std::numeric_limits<long long>::max();
 
-    for (const SpatialObjectRecord& record : records_)
+    // Linear fallback for an index without SpatialHierarchy.
+    if (hierarchy_ == nullptr)
     {
-        if (record.kind != kind)
-            continue;
-
-        const long long distance = distanceToBounds(point, record.bounds);
-
-        if (best == nullptr || distance < bestDistance ||
-            (distance == bestDistance && record.id < best->id))
+        for (const SpatialObjectRecord& record : records_)
         {
-            best = &record;
-            bestDistance = distance;
+            considerNearestRecord(record, point, kind, best, bestDistance);
+        }
+
+        return best;
+    }
+
+    std::priority_queue<RegionCandidate,
+                        std::vector<RegionCandidate>,
+                        RegionCandidateGreater>
+        candidates;
+
+    const RoutingRegion& root = hierarchy_->root();
+
+    candidates.push(
+        RegionCandidate{&root, distanceToBounds(point, root.bounds())});
+
+    while (!candidates.empty())
+    {
+        const RegionCandidate candidate = candidates.top();
+
+        candidates.pop();
+
+        // Because candidates are ordered by their minimum
+        // possible Manhattan distance, no remaining region
+        // can contain a better result.
+        //
+        // Important: use >, not >=. An equally distant
+        // region may contain a lexicographically smaller ID.
+        if (candidate.distance > bestDistance)
+            break;
+
+        const auto bucket = regionObjects_.find(candidate.region);
+
+        // Objects crossing child boundaries can be stored
+        // directly in this parent region, so inspect the
+        // region's own bucket before descending.
+        if (bucket != regionObjects_.end())
+        {
+            for (const std::string& id : bucket->second)
+            {
+                const SpatialObjectRecord* record = find(id);
+
+                if (record != nullptr)
+                {
+                    considerNearestRecord(*record,
+                                          point,
+                                          kind,
+                                          best,
+                                          bestDistance);
+                }
+            }
+        }
+
+        for (std::size_t i = 0; i < 4; ++i)
+        {
+            const RoutingRegion* child = candidate.region->child(i);
+
+            if (child == nullptr)
+                continue;
+
+            const long long childDistance =
+                distanceToBounds(point, child->bounds());
+
+            if (childDistance <= bestDistance)
+            {
+                candidates.push(RegionCandidate{child, childDistance});
+            }
         }
     }
 
