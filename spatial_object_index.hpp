@@ -60,6 +60,9 @@ class SpatialObjectIndex
     std::vector<std::string> queryNetOccupancy(RegionBounds bounds,
                                                const NetId& netId) const;
 
+    std::vector<std::string> queryLayerOccupancy(RegionBounds bounds,
+                                                 int layer) const;
+
     const SpatialObjectRecord* findNearest(Point point,
                                            SpatialObjectKind kind) const;
 
