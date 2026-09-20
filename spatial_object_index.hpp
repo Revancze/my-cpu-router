@@ -53,7 +53,6 @@ class SpatialObjectIndex
   public:
     SpatialObjectIndex() = default;
 
-    SpatialCongestion queryCongestion(RegionBounds bounds) const;
 
     explicit SpatialObjectIndex(SpatialHierarchy& hierarchy);
 
@@ -80,6 +79,7 @@ class SpatialObjectIndex
 
     std::vector<std::string> queryLayerOccupancy(RegionBounds bounds,
                                                  int layer) const;
+    SpatialCongestion queryCongestion(RegionBounds bounds) const;
 
     const SpatialObjectRecord* findNearest(Point point,
                                            SpatialObjectKind kind) const;
