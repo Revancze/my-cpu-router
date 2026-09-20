@@ -24,6 +24,15 @@ fi
 
 # shellcheck source=tools/lib/console.sh
 . "$CONSOLE_SH"
+. "$ROOT_DIR/tools/lib/runtime.sh"
+
+if ! codelaxy_runtime_init
+then
+    printf 'STATUSMAN ERROR: could not initialize runtime.\n'
+    exit 1
+fi
+
+trap codelaxy_runtime_cleanup 0
 
 # ============================================================
 # HELPERS
@@ -561,7 +570,7 @@ build_diff_markers()
                 return
             fi
 
-            BASE_FILE=$(mktemp 2>/dev/null)
+            BASE_FILE=$(codelaxy_temp_file statusman-base 2>/dev/null)
 
             if [ -z "$BASE_FILE" ] ||
                [ ! -f "$BASE_FILE" ]
@@ -617,7 +626,7 @@ render_compare_file_stat()
             return
         fi
 
-        BASE_FILE=$(mktemp 2>/dev/null)
+        BASE_FILE=$(codelaxy_temp_file statusman-base 2>/dev/null)
 
         if [ -z "$BASE_FILE" ] ||
            [ ! -f "$BASE_FILE" ]
@@ -775,12 +784,12 @@ build_lifecycle_states()
         return
     fi
 
-    LIFE_STAGED_INDEX=$(mktemp 2>/dev/null)
-    LIFE_STAGED_REMOVALS=$(mktemp 2>/dev/null)
-    LIFE_UNSTAGED=$(mktemp 2>/dev/null)
-    LIFE_UNSTAGED_REMOVALS=$(mktemp 2>/dev/null)
-    LIFE_MAP=$(mktemp 2>/dev/null)
-    LIFE_STAGED_WORKTREE=$(mktemp 2>/dev/null)
+    LIFE_STAGED_INDEX=$(codelaxy_temp_file statusman-staged-index 2>/dev/null)
+    LIFE_STAGED_REMOVALS=$(codelaxy_temp_file statusman-staged-removals 2>/dev/null)
+    LIFE_UNSTAGED=$(codelaxy_temp_file statusman-unstaged 2>/dev/null)
+    LIFE_UNSTAGED_REMOVALS=$(codelaxy_temp_file statusman-unstaged-removals 2>/dev/null)
+    LIFE_MAP=$(codelaxy_temp_file statusman-lifecycle-map 2>/dev/null)
+    LIFE_STAGED_WORKTREE=$(codelaxy_temp_file statusman-staged-worktree 2>/dev/null)
 
     if [ -z "$LIFE_STAGED_INDEX" ] || [ ! -f "$LIFE_STAGED_INDEX" ] ||
        [ -z "$LIFE_STAGED_REMOVALS" ] || [ ! -f "$LIFE_STAGED_REMOVALS" ] ||
@@ -1330,8 +1339,8 @@ render_file()
         return
     fi
 
-    RF_MARKER_FILE=$(mktemp 2>/dev/null)
-    RF_REMOVAL_FILE=$(mktemp 2>/dev/null)
+    RF_MARKER_FILE=$(codelaxy_temp_file statusman-markers 2>/dev/null)
+    RF_REMOVAL_FILE=$(codelaxy_temp_file statusman-removals 2>/dev/null)
 
     if [ -z "$RF_MARKER_FILE" ] || [ ! -f "$RF_MARKER_FILE" ] ||
        [ -z "$RF_REMOVAL_FILE" ] || [ ! -f "$RF_REMOVAL_FILE" ]
@@ -1381,8 +1390,8 @@ render_file()
     # Explicit REF comparison gets the full Git lifecycle view.
     if [ -n "$COMPARE_REF" ]
     then
-        STATE_FILE=$(mktemp 2>/dev/null)
-        SHOW_FILE=$(mktemp 2>/dev/null)
+        STATE_FILE=$(codelaxy_temp_file statusman-state 2>/dev/null)
+        SHOW_FILE=$(codelaxy_temp_file statusman-show 2>/dev/null)
 
         if [ -z "$STATE_FILE" ] || [ ! -f "$STATE_FILE" ] ||
            [ -z "$SHOW_FILE" ] || [ ! -f "$SHOW_FILE" ]
@@ -1600,19 +1609,23 @@ then
 
     PYTHONDONTWRITEBYTECODE=1 \
         PYTHONPATH="$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}" \
-        exec "$PYTHON" -m tools.codelaxy.snapshot_cli \
+        codelaxy_native_exec \
+        "$PYTHON" -m tools.codelaxy.snapshot_cli \
             --repository "$ROOT_DIR" \
             --scope "$JSON_SCOPE"
+    JSON_RESULT=$?
+    codelaxy_runtime_cleanup
+    exit "$JSON_RESULT"
 fi
 
 # ============================================================
 # TEMPORARY SNAPSHOT FILES
 # ============================================================
 
-SNAPSHOT_FACTS_FILE=$(mktemp 2>/dev/null)
-AVAILABLE_FILES=$(mktemp 2>/dev/null)
-INSPECTION_FILES=$(mktemp 2>/dev/null)
-WARNINGS_FILE=$(mktemp 2>/dev/null)
+SNAPSHOT_FACTS_FILE=$(codelaxy_temp_file statusman-snapshot-facts 2>/dev/null)
+AVAILABLE_FILES=$(codelaxy_temp_file statusman-available-files 2>/dev/null)
+INSPECTION_FILES=$(codelaxy_temp_file statusman-inspection-files 2>/dev/null)
+WARNINGS_FILE=$(codelaxy_temp_file statusman-warnings 2>/dev/null)
 
 if [ -z "$SNAPSHOT_FACTS_FILE" ] ||
    [ ! -f "$SNAPSHOT_FACTS_FILE" ] ||
@@ -1641,12 +1654,14 @@ cleanup()
         "$AVAILABLE_FILES" \
         "$INSPECTION_FILES" \
         "$WARNINGS_FILE"
+    codelaxy_runtime_cleanup
 }
 
 trap cleanup 0
 
 if ! PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH="$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}" \
+    codelaxy_native_exec \
     "$PYTHON" -m tools.codelaxy.snapshot_cli \
         --repository "$ROOT_DIR" \
         --scope worktree \

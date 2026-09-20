@@ -5,6 +5,14 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 ROOT_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
 cd "$ROOT_DIR" || exit 1
 . "$ROOT_DIR/tools/lib/console.sh"
+. "$ROOT_DIR/tools/lib/runtime.sh"
+
+if ! codelaxy_runtime_init; then
+    ui_fail "Could not initialize Codelaxy runtime."
+    exit 1
+fi
+
+trap codelaxy_runtime_cleanup 0
 
 deny() {
     ui_footer_fail "ACCESS DENIED"
@@ -37,7 +45,7 @@ if ! git diff --cached --check; then
 fi
 ui_ok "Whitespace clean."
 
-FILE_LIST=$(mktemp)
+FILE_LIST=$(codelaxy_temp_file doorman-files)
 if [ ! -f "$FILE_LIST" ]; then
     ui_fail "Could not create temporary file list."
     deny 1
@@ -50,6 +58,7 @@ cleanup() {
     rm -f "$FILE_LIST"
     [ -z "$FORMAT_LOG" ] || rm -f "$FORMAT_LOG"
     [ -z "$SNAPSHOT_DIR" ] || rm -rf "$SNAPSHOT_DIR"
+    codelaxy_runtime_cleanup
 }
 trap cleanup 0
 
@@ -78,7 +87,7 @@ done < "$FILE_LIST"
 [ "$NEWLINE_FAILED" -eq 0 ] || deny 1
 ui_ok "Final newlines clean."
 
-SNAPSHOT_DIR=$(mktemp -d)
+SNAPSHOT_DIR=$(codelaxy_snapshot_dir doorman-staged)
 if [ ! -d "$SNAPSHOT_DIR" ]; then
     ui_fail "Could not create staged snapshot."
     deny 1
@@ -100,13 +109,17 @@ if [ ! -f "$SNAPSHOT_DIR/.clang-format" ]; then
     deny 1
 fi
 
-FORMAT_LOG=$(mktemp)
+FORMAT_LOG=$(codelaxy_temp_file doorman-format)
 if [ ! -f "$FORMAT_LOG" ]; then
     ui_fail "Could not create format-check log."
     deny 1
 fi
 
-if ! FORMAT_ROOT="$SNAPSHOT_DIR" FORMAT_CHECK_QUIET=1 bash "$SNAPSHOT_DIR/tools/format-check.sh" > "$FORMAT_LOG" 2>&1; then
+if ! CODELAXY_RUNTIME_ROOT="$CODELAXY_RUNTIME_BASE" \
+    FORMAT_ROOT="$SNAPSHOT_DIR" \
+    FORMAT_CHECK_QUIET=1 \
+    bash "$SNAPSHOT_DIR/tools/format-check.sh" > "$FORMAT_LOG" 2>&1
+then
     ui_fail "clang-format check failed."
     [ ! -s "$FORMAT_LOG" ] || cat "$FORMAT_LOG"
     deny 1
@@ -119,7 +132,12 @@ if [ ! -f "$SNAPSHOT_DIR/tools/ironman.sh" ]; then
 fi
 
 printf '\n'
-if ! IRONMAN_ROOT="$SNAPSHOT_DIR" IRONMAN_SNAPSHOT_MODE=1 IRONMAN_EMBEDDED=1 bash "$SNAPSHOT_DIR/tools/ironman.sh"; then
+if ! CODELAXY_RUNTIME_ROOT="$CODELAXY_RUNTIME_BASE" \
+    IRONMAN_ROOT="$SNAPSHOT_DIR" \
+    IRONMAN_SNAPSHOT_MODE=1 \
+    IRONMAN_EMBEDDED=1 \
+    bash "$SNAPSHOT_DIR/tools/ironman.sh"
+then
     printf '\n'
     ui_fail "IronMan rejected the staged snapshot."
     deny 1

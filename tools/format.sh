@@ -5,6 +5,14 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 ROOT_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
 cd "$ROOT_DIR" || exit 1
 . "$ROOT_DIR/tools/lib/console.sh"
+. "$ROOT_DIR/tools/lib/runtime.sh"
+
+if ! codelaxy_runtime_init; then
+    ui_fail "Could not initialize Codelaxy runtime."
+    exit 1
+fi
+
+trap codelaxy_runtime_cleanup 0
 
 if ! command -v clang-format >/dev/null 2>&1; then
     ui_fail "clang-format was not found in PATH."
@@ -18,12 +26,15 @@ case "$MODE" in
     *) ui_fail "Usage: bash tools/format.sh [--changed|--all]"; exit 1 ;;
 esac
 
-FILE_LIST=$(mktemp)
+FILE_LIST=$(codelaxy_temp_file format-files)
 if [ ! -f "$FILE_LIST" ]; then
     ui_fail "Could not create temporary file list."
     exit 1
 fi
-cleanup() { rm -f "$FILE_LIST"; }
+cleanup() {
+    rm -f "$FILE_LIST"
+    codelaxy_runtime_cleanup
+}
 trap cleanup 0
 
 if [ "$MODE" = "all" ]; then
@@ -42,7 +53,7 @@ while IFS= read -r -d '' FILE
 do
     [ -f "$FILE" ] || continue
     SCANNED=$((SCANNED + 1))
-    BEFORE=$(mktemp)
+    BEFORE=$(codelaxy_temp_file format-before)
 
     if [ ! -f "$BEFORE" ]; then
         ui_fail "Could not create temporary comparison file."
@@ -51,7 +62,8 @@ do
 
     cp -- "$FILE" "$BEFORE"
 
-    if ! clang-format -i --style=file "$FILE"; then
+    if ! codelaxy_native_exec clang-format -i --style=file "$FILE"
+    then
         rm -f "$BEFORE"
         ui_fail "clang-format failed: $FILE"
         exit 1

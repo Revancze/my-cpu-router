@@ -4,12 +4,18 @@ import os
 import shutil
 import stat
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 SOURCE_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(SOURCE_ROOT))
+
+from tests.git_test_support import isolated_git_environment
+from tests.git_test_support import git_local_environment_variables
 
 
 class RepositoryFixture:
@@ -48,9 +54,11 @@ fi
         )
 
         clang_format = self.fake_bin / "clang-format"
-        clang_format.chmod(clang_format.stat().st_mode | stat.S_IXUSR)
+        clang_format.chmod(
+            clang_format.stat().st_mode | stat.S_IXUSR
+        )
 
-        self.environment = os.environ.copy()
+        self.environment = isolated_git_environment()
 
         for variable in (
             "FORMAT_CHECK_QUIET",
@@ -70,7 +78,11 @@ fi
 
         self.git("init", "-b", "main")
         self.git("config", "user.name", "Codelaxy Test")
-        self.git("config", "user.email", "codelaxy-test@example.invalid")
+        self.git(
+            "config",
+            "user.email",
+            "codelaxy-test@example.invalid",
+        )
         self.git("config", "commit.gpgsign", "false")
 
     def close(self) -> None:
@@ -80,7 +92,10 @@ fi
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(content.encode("utf-8"))
 
-    def git(self, *arguments: str) -> subprocess.CompletedProcess[str]:
+    def git(
+        self,
+        *arguments: str,
+    ) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             ["git", *arguments],
             cwd=self.root,
@@ -91,7 +106,12 @@ fi
         )
 
     def commit_all(self) -> None:
-        self.git("add", ".clang-format", ".gitignore", "tools")
+        self.git(
+            "add",
+            ".clang-format",
+            ".gitignore",
+            "tools",
+        )
 
         for path in sorted(self.root.iterdir()):
             if path.name in {
@@ -106,7 +126,10 @@ fi
 
         self.git("commit", "-m", "test fixture")
 
-    def run_tool(self, name: str) -> subprocess.CompletedProcess[str]:
+    def run_tool(
+        self,
+        name: str,
+    ) -> subprocess.CompletedProcess[str]:
         bash = shutil.which("bash")
 
         if bash is None:
@@ -159,7 +182,194 @@ class GuardianAuthorityTest(unittest.TestCase):
         self.fixture = RepositoryFixture()
         self.addCleanup(self.fixture.close)
 
-    def test_statusman_preserves_clean_repository_state(self) -> None:
+    def test_repository_fixture_ignores_parent_git_environment(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            parent_root = Path(directory) / "parent"
+            parent_root.mkdir()
+
+            parent_environment = isolated_git_environment()
+
+            def parent_git(
+                *arguments: str,
+            ) -> subprocess.CompletedProcess[str]:
+                return subprocess.run(
+                    ["git", *arguments],
+                    cwd=parent_root,
+                    env=parent_environment,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+
+            parent_git("init", "-b", "main")
+            parent_git(
+                "config",
+                "user.name",
+                "Parent Test",
+            )
+            parent_git(
+                "config",
+                "user.email",
+                "parent-test@example.invalid",
+            )
+            parent_git(
+                "config",
+                "commit.gpgsign",
+                "false",
+            )
+
+            parent_file = parent_root / "parent.txt"
+            parent_file.write_text(
+                "parent\n",
+                encoding="utf-8",
+            )
+
+            parent_git("add", "parent.txt")
+            parent_git(
+                "commit",
+                "-m",
+                "parent fixture",
+            )
+
+            parent_state_before = (
+                parent_git(
+                    "rev-parse",
+                    "HEAD",
+                ).stdout,
+                parent_git(
+                    "symbolic-ref",
+                    "--short",
+                    "HEAD",
+                ).stdout,
+                parent_git(
+                    "for-each-ref",
+                    "--format=%(refname) %(objectname)",
+                    "refs/heads",
+                ).stdout,
+                parent_git(
+                    "status",
+                    "--porcelain=v2",
+                    "--branch",
+                ).stdout,
+                parent_git(
+                    "config",
+                    "--bool",
+                    "core.bare",
+                ).stdout,
+            )
+
+            poisoned_environment = {
+                "GIT_DIR": (
+                    parent_root / ".git"
+                ).as_posix(),
+                "GIT_WORK_TREE": parent_root.as_posix(),
+                "GIT_INDEX_FILE": (
+                    parent_root / ".git" / "index"
+                ).as_posix(),
+            }
+
+            with patch.dict(
+                os.environ,
+                poisoned_environment,
+                clear=False,
+            ):
+                isolated_fixture = RepositoryFixture()
+
+            try:
+                for variable in (
+                    git_local_environment_variables()
+                ):
+                    self.assertNotIn(
+                        variable,
+                        isolated_fixture.environment,
+                    )
+
+                isolated_fixture.write(
+                    isolated_fixture.root
+                    / "tracked.txt",
+                    "base\n",
+                )
+                isolated_fixture.commit_all()
+
+                isolated_fixture.git(
+                    "switch",
+                    "-c",
+                    "other",
+                )
+
+                isolated_fixture.write(
+                    isolated_fixture.root
+                    / "other.txt",
+                    "other\n",
+                )
+                isolated_fixture.git(
+                    "add",
+                    "other.txt",
+                )
+                isolated_fixture.git(
+                    "commit",
+                    "-m",
+                    "other change",
+                )
+
+                isolated_fixture.git(
+                    "switch",
+                    "main",
+                )
+                isolated_fixture.git(
+                    "merge",
+                    "--ff-only",
+                    "other",
+                )
+
+                self.assertEqual(
+                    isolated_fixture.git(
+                        "symbolic-ref",
+                        "--short",
+                        "HEAD",
+                    ).stdout.strip(),
+                    "main",
+                )
+            finally:
+                isolated_fixture.close()
+
+            parent_state_after = (
+                parent_git(
+                    "rev-parse",
+                    "HEAD",
+                ).stdout,
+                parent_git(
+                    "symbolic-ref",
+                    "--short",
+                    "HEAD",
+                ).stdout,
+                parent_git(
+                    "for-each-ref",
+                    "--format=%(refname) %(objectname)",
+                    "refs/heads",
+                ).stdout,
+                parent_git(
+                    "status",
+                    "--porcelain=v2",
+                    "--branch",
+                ).stdout,
+                parent_git(
+                    "config",
+                    "--bool",
+                    "core.bare",
+                ).stdout,
+            )
+
+            self.assertEqual(
+                parent_state_after,
+                parent_state_before,
+            )
+
+    def test_statusman_preserves_clean_repository_state(
+        self,
+    ) -> None:
         self.fixture.write(
             self.fixture.root / "tracked.txt",
             "committed\n",
@@ -174,13 +384,18 @@ class GuardianAuthorityTest(unittest.TestCase):
             0,
             result.stdout + result.stderr,
         )
-        self.assertIn("Working tree clean.", result.stdout)
+        self.assertIn(
+            "Working tree clean.",
+            result.stdout,
+        )
         self.assertEqual(
             self.fixture.git_state(),
             state_before,
         )
 
-    def test_statusman_preserves_mixed_repository_state(self) -> None:
+    def test_statusman_preserves_mixed_repository_state(
+        self,
+    ) -> None:
         tracked = self.fixture.root / "tracked.txt"
 
         self.fixture.write(
@@ -193,7 +408,10 @@ class GuardianAuthorityTest(unittest.TestCase):
             tracked,
             "staged\n",
         )
-        self.fixture.git("add", "tracked.txt")
+        self.fixture.git(
+            "add",
+            "tracked.txt",
+        )
 
         self.fixture.write(
             tracked,
@@ -213,7 +431,10 @@ class GuardianAuthorityTest(unittest.TestCase):
             0,
             result.stdout + result.stderr,
         )
-        self.assertIn("STATUSMAN", result.stdout)
+        self.assertIn(
+            "STATUSMAN",
+            result.stdout,
+        )
         self.assertEqual(
             self.fixture.git_state(),
             state_before,
@@ -254,16 +475,27 @@ class GuardianAuthorityTest(unittest.TestCase):
             0,
             result.stdout + result.stderr,
         )
-        self.assertIn("original.txt", result.stdout)
-        self.assertIn("renamed.txt", result.stdout)
-        self.assertIn("deleted.txt", result.stdout)
+        self.assertIn(
+            "original.txt",
+            result.stdout,
+        )
+        self.assertIn(
+            "renamed.txt",
+            result.stdout,
+        )
+        self.assertIn(
+            "deleted.txt",
+            result.stdout,
+        )
 
         self.assertEqual(
             self.fixture.git_state(),
             state_before,
         )
 
-    def test_statusman_reports_conflict_without_resolving_it(self) -> None:
+    def test_statusman_reports_conflict_without_resolving_it(
+        self,
+    ) -> None:
         conflicted = self.fixture.root / "conflicted.txt"
 
         self.fixture.write(
@@ -347,7 +579,9 @@ class GuardianAuthorityTest(unittest.TestCase):
             state_before,
         )
 
-    def test_mrproper_changes_worktree_but_preserves_index(self) -> None:
+    def test_mrproper_changes_worktree_but_preserves_index(
+        self,
+    ) -> None:
         tracked = self.fixture.root / "tracked.txt"
 
         self.fixture.write(
@@ -404,9 +638,13 @@ class GuardianAuthorityTest(unittest.TestCase):
         shutil.which("g++"),
         "g++ is required",
     )
-    def test_ironman_runs_tests_without_changing_repository(self) -> None:
+    def test_ironman_runs_tests_without_changing_repository(
+        self,
+    ) -> None:
         self.fixture.write(
-            self.fixture.root / "tests" / "sample_test.cpp",
+            self.fixture.root
+            / "tests"
+            / "sample_test.cpp",
             "int main() { return 0; }\n",
         )
 
@@ -438,7 +676,9 @@ class GuardianAuthorityTest(unittest.TestCase):
         shutil.which("g++"),
         "g++ is required",
     )
-    def test_ironman_rejects_verification_that_changes_worktree(self) -> None:
+    def test_ironman_rejects_verification_that_changes_worktree(
+        self,
+    ) -> None:
         tracked = self.fixture.root / "tracked.txt"
 
         self.fixture.write(
@@ -448,7 +688,9 @@ class GuardianAuthorityTest(unittest.TestCase):
         self.fixture.commit_all()
 
         self.fixture.write(
-            self.fixture.root / "tools" / "verify.sh",
+            self.fixture.root
+            / "tools"
+            / "verify.sh",
             "#!/usr/bin/env bash\n"
             "printf 'changed\\n' > tracked.txt\n",
         )
@@ -472,7 +714,9 @@ class GuardianAuthorityTest(unittest.TestCase):
         self,
     ) -> None:
         self.fixture.write(
-            self.fixture.root / "tests" / "failing_test.cpp",
+            self.fixture.root
+            / "tests"
+            / "failing_test.cpp",
             "int main() { return 7; }\n",
         )
 
