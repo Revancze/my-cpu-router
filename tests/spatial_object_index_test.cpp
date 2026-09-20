@@ -409,6 +409,47 @@ int main()
     assert(containsId(dataBOccupancy, "wire:DATA_B:0"));
     assert(!containsId(dataBOccupancy, "wire:DATA_A:0"));
 
+    // --------------------------------------------------------
+    // LAYER OCCUPANCY
+    // --------------------------------------------------------
+
+    SpatialObjectIndex layerIndex;
+
+    assert(layerIndex.insert("wire:L0",
+                             RegionBounds{1, 1, 0, 4, 2, 1},
+                             SpatialObjectKind::WireSegment));
+
+    assert(layerIndex.insert("wire:L1",
+                             RegionBounds{1, 1, 1, 4, 2, 2},
+                             SpatialObjectKind::WireSegment));
+
+    // Via spans both layers.
+    assert(layerIndex.insert("via:01",
+                             RegionBounds{2, 2, 0, 3, 3, 2},
+                             SpatialObjectKind::Via));
+
+    // Same layer, but outside the queried XY area.
+    assert(layerIndex.insert("wire:OUTSIDE",
+                             RegionBounds{20, 20, 0, 22, 21, 1},
+                             SpatialObjectKind::WireSegment));
+
+    const std::vector<std::string> layer0 =
+        layerIndex.queryLayerOccupancy(RegionBounds{0, 0, 0, 10, 10, 2}, 0);
+
+    assert(containsId(layer0, "wire:L0"));
+    assert(containsId(layer0, "via:01"));
+
+    assert(!containsId(layer0, "wire:L1"));
+    assert(!containsId(layer0, "wire:OUTSIDE"));
+
+    const std::vector<std::string> layer1 =
+        layerIndex.queryLayerOccupancy(RegionBounds{0, 0, 0, 10, 10, 2}, 1);
+
+    assert(containsId(layer1, "wire:L1"));
+    assert(containsId(layer1, "via:01"));
+
+    assert(!containsId(layer1, "wire:L0"));
+
     std::cout << "spatial_object_index test: PASS\n";
 
     return 0;

@@ -378,6 +378,20 @@ std::vector<std::string> SpatialObjectIndex::queryNetOccupancy(
     return result;
 }
 
+std::vector<std::string> SpatialObjectIndex::queryLayerOccupancy(
+    RegionBounds bounds,
+    int layer) const
+{
+    const RegionBounds layerBounds{bounds.minX,
+                                   bounds.minY,
+                                   layer,
+                                   bounds.maxX,
+                                   bounds.maxY,
+                                   layer + 1};
+
+    return queryIntersecting(layerBounds);
+}
+
 const SpatialObjectRecord* SpatialObjectIndex::findNearest(
     Point point,
     SpatialObjectKind kind) const
