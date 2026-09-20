@@ -38,15 +38,30 @@ def emit(*fields: object) -> None:
 
 
 def repository_root() -> Path:
+    requested_root = Path.cwd().resolve()
+
     result = subprocess.run(
-        ["git", "rev-parse", "--show-toplevel"],
+        [
+            "git",
+            "rev-parse",
+            "--show-cdup",
+        ],
+        cwd=requested_root,
         check=True,
         capture_output=True,
     )
 
-    return Path(
-        os.fsdecode(result.stdout.strip())
+    relative_root = os.fsdecode(
+        result.stdout.rstrip(b"\r\n")
     )
+
+    if not relative_root:
+        return requested_root
+
+    return (
+        requested_root
+        / relative_root
+    ).resolve()
 
 
 def git_paths(

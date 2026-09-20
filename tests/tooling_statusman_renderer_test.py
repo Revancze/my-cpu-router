@@ -11,6 +11,9 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from tests.git_test_support import isolated_git_environment
 
 
 class StatusManRepository:
@@ -19,7 +22,7 @@ class StatusManRepository:
         self.root = Path(self.temporary_directory.name) / "repository"
         self.root.mkdir()
 
-        self.environment = os.environ.copy()
+        self.environment = isolated_git_environment()
         self.environment["NO_COLOR"] = "1"
         self.environment["PYTHONDONTWRITEBYTECODE"] = "1"
         self.environment["PYTHONPATH"] = str(self.root)

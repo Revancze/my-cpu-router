@@ -5,6 +5,14 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 ROOT_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
 cd "$ROOT_DIR" || exit 1
 . "$ROOT_DIR/tools/lib/console.sh"
+. "$ROOT_DIR/tools/lib/runtime.sh"
+
+if ! codelaxy_runtime_init; then
+    ui_fail "Could not initialize Codelaxy runtime."
+    exit 1
+fi
+
+trap codelaxy_runtime_cleanup 0
 
 ui_tool_header "MRPROPER" "WORKTREE CLEANUP" "format · whitespace · EOF" "$UI_CYAN" "$UI_GREEN"
 
@@ -24,17 +32,22 @@ else
     exit 1
 fi
 
-RESULT_FILE=$(mktemp)
+RESULT_FILE=$(codelaxy_temp_file mrproper-result)
 if [ ! -f "$RESULT_FILE" ]; then
     ui_fail "Could not create temporary result file."
     ui_footer_fail "CLEANUP FAILED"
     exit 1
 fi
 
-cleanup() { rm -f "$RESULT_FILE"; }
+cleanup() {
+    rm -f "$RESULT_FILE"
+    codelaxy_runtime_cleanup
+}
 trap cleanup 0
 
-if ! "$PYTHON" "$ROOT_DIR/tools/mrproper.py" > "$RESULT_FILE"; then
+if ! codelaxy_native_exec \
+    "$PYTHON" "$ROOT_DIR/tools/mrproper.py" > "$RESULT_FILE"
+then
     ui_fail "Cleanup engine failed."
     ui_footer_fail "CLEANUP FAILED"
     exit 1

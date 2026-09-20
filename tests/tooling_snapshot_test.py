@@ -7,10 +7,13 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+
+from tests.git_test_support import isolated_git_environment
 
 from tools.codelaxy import GitSnapshotError, decode_record, observe_snapshot
 
@@ -20,7 +23,7 @@ class GitRepository:
         self.temporary_directory = tempfile.TemporaryDirectory()
         self.root = Path(self.temporary_directory.name) / "repository"
         self.root.mkdir()
-        self.environment = os.environ.copy()
+        self.environment = isolated_git_environment()
         self.git("init", "-b", "main")
         self.git("config", "user.name", "Codelaxy Test")
         self.git("config", "user.email", "codelaxy-test@example.invalid")
@@ -75,6 +78,47 @@ class GitSnapshotTest(unittest.TestCase):
         self.repository = GitRepository()
         self.addCleanup(self.repository.close)
 
+    def test_snapshot_ignores_parent_git_environment(self) -> None:
+        parent = GitRepository()
+        self.addCleanup(parent.close)
+
+        parent.write("parent.txt", "parent\n")
+        parent.commit_all("parent fixture")
+
+        self.repository.write("target.txt", "target\n")
+        self.repository.commit_all("target fixture")
+
+        expected_head = (
+            self.repository.state()[0]
+            .decode()
+            .strip()
+        )
+
+        with patch.dict(
+            os.environ,
+            {
+                "GIT_DIR": str(parent.root / ".git"),
+                "GIT_WORK_TREE": str(parent.root),
+                "GIT_INDEX_FILE": str(
+                    parent.root / ".git" / "index"
+                ),
+            },
+            clear=False,
+        ):
+            snapshot = observe_snapshot(
+                self.repository.root,
+                "worktree",
+            )
+
+        self.assertEqual(
+            snapshot.head_oid,
+            expected_head,
+        )
+        self.assertEqual(
+            snapshot.changes,
+            (),
+        )
+
     def test_unborn_repository_has_no_head_oid(self) -> None:
         self.repository.write("untracked.txt", "untracked\n")
 
@@ -95,6 +139,16 @@ class GitSnapshotTest(unittest.TestCase):
         self.assertEqual(first.changes, ())
         self.assertTrue(first.snapshot_id.startswith("sha256:"))
         self.assertEqual(self.repository.state(), state_before)
+
+    def test_snapshot_resolves_root_from_nested_relative_cdup(self) -> None:
+        self.repository.write("nested/deeper/tracked.txt", "committed\n")
+        self.repository.commit_all()
+
+        nested = self.repository.root / "nested" / "deeper"
+        snapshot = observe_snapshot(nested, "worktree")
+
+        self.assertEqual(snapshot.changes, ())
+        self.assertEqual(snapshot.head_oid, self.repository.state()[0].decode().strip())
 
     def test_staged_snapshot_ignores_unstaged_and_untracked_content(self) -> None:
         self.repository.write("tracked.txt", "committed\n")
@@ -192,6 +246,19 @@ class GitSnapshotTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary_directory:
             with self.assertRaisesRegex(GitSnapshotError, "rev-parse"):
                 observe_snapshot(temporary_directory, "worktree")
+
+    def test_git_metadata_directory_is_rejected_as_non_worktree(self) -> None:
+        metadata_directory = (
+            self.repository.root
+            / ".git"
+            / "codelaxy"
+            / "runtime"
+            / "test"
+        )
+        metadata_directory.mkdir(parents=True)
+
+        with self.assertRaisesRegex(GitSnapshotError, "rev-parse"):
+            observe_snapshot(metadata_directory, "worktree")
 
     @unittest.skipUnless(shutil.which("bash"), "bash is required")
     def test_statusman_json_matches_engine_and_preserves_repository(

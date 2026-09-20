@@ -14,6 +14,14 @@ if [ ! -f "$CONSOLE_SH" ]; then
     exit 1
 fi
 . "$CONSOLE_SH"
+. "$ROOT_DIR/tools/lib/runtime.sh"
+
+if ! codelaxy_runtime_init; then
+    ui_fail "Could not initialize Codelaxy runtime."
+    exit 1
+fi
+
+trap codelaxy_runtime_cleanup 0
 
 if ! command -v g++ >/dev/null 2>&1; then
     [ "$EMBEDDED" = "1" ] && ui_section "IRONMAN" || ui_ironman_banner
@@ -21,7 +29,7 @@ if ! command -v g++ >/dev/null 2>&1; then
     exit 1
 fi
 
-COMPILER_VERSION=$(g++ --version | head -n 1)
+COMPILER_VERSION=$(codelaxy_native_exec g++ --version | head -n 1)
 
 if [ "$EMBEDDED" = "1" ]; then
     ui_section "IRONMAN"
@@ -47,7 +55,10 @@ if [ "$SNAPSHOT_MODE" != "1" ]; then
 fi
 
 printf '\n'
-if VERIFY_EMBEDDED=1 bash "$ROOT_DIR/tools/verify.sh"; then
+if CODELAXY_RUNTIME_ROOT="$CODELAXY_RUNTIME_BASE" \
+    VERIFY_EMBEDDED=1 \
+    bash "$ROOT_DIR/tools/verify.sh"
+then
     VERIFY_RESULT=0
 else
     VERIFY_RESULT=$?

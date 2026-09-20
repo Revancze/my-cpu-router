@@ -16,9 +16,40 @@ class GitSnapshotError(RuntimeError):
     """Raised when an exact snapshot cannot be obtained safely."""
 
 
-def _run_git(root: Path, *arguments: str, allow_failure: bool = False) -> bytes:
+def _git_local_environment_variables() -> tuple[str, ...]:
+    result = subprocess.run(
+        ["git", "rev-parse", "--local-env-vars"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    if result.returncode != 0:
+        message = result.stderr.strip()
+        raise GitSnapshotError(
+            "git rev-parse --local-env-vars failed: "
+            f"{message or result.returncode}"
+        )
+
+    return tuple(
+        variable
+        for variable in result.stdout.splitlines()
+        if variable
+    )
+
+
+def _isolated_git_environment() -> dict[str, str]:
     environment = os.environ.copy()
+
+    for variable in _git_local_environment_variables():
+        environment.pop(variable, None)
+
     environment["GIT_OPTIONAL_LOCKS"] = "0"
+    return environment
+
+
+def _run_git(root: Path, *arguments: str, allow_failure: bool = False) -> bytes:
+    environment = _isolated_git_environment()
     result = subprocess.run(
         ["git", *arguments],
         cwd=root,
@@ -36,6 +67,39 @@ def _run_git(root: Path, *arguments: str, allow_failure: bool = False) -> bytes:
 
 def _decode_path(value: bytes) -> str:
     return os.fsdecode(value)
+
+
+def _repository_root(repository: str | os.PathLike[str]) -> Path:
+    requested_root = Path(repository).resolve()
+
+    work_tree_state = _run_git(
+        requested_root,
+        "rev-parse",
+        "--is-inside-work-tree",
+    )
+
+    if work_tree_state.rstrip(b"\r\n") != b"true":
+        raise GitSnapshotError(
+            "git rev-parse did not identify a working tree"
+        )
+
+    root_offset = _run_git(
+        requested_root,
+        "rev-parse",
+        "--show-cdup",
+    )
+
+    relative_root = _decode_path(
+        root_offset.rstrip(b"\r\n")
+    )
+
+    if not relative_root:
+        return requested_root
+
+    return (
+        requested_root
+        / relative_root
+    ).resolve()
 
 
 def _parse_status(status: bytes) -> tuple[Change, ...]:
@@ -186,9 +250,7 @@ def observe_snapshot(repository: str | os.PathLike[str], scope: str) -> Snapshot
     if scope not in VALID_SCOPES:
         raise GitSnapshotError(f"invalid snapshot scope: {scope!r}")
 
-    requested_root = Path(repository).resolve()
-    root_output = _run_git(requested_root, "rev-parse", "--show-toplevel")
-    root = Path(_decode_path(root_output.rstrip(b"\r\n"))).resolve()
+    root = _repository_root(repository)
 
     head_output = _run_git(root, "rev-parse", "--verify", "HEAD", allow_failure=True)
     if head_output:

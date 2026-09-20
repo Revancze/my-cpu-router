@@ -11,6 +11,14 @@ if [ ! -f "$CONSOLE_SH" ]; then
     exit 1
 fi
 . "$CONSOLE_SH"
+. "$ROOT_DIR/tools/lib/runtime.sh"
+
+if ! codelaxy_runtime_init; then
+    ui_fail "Could not initialize Codelaxy runtime."
+    exit 1
+fi
+
+trap codelaxy_runtime_cleanup 0
 
 EMBEDDED=${VERIFY_EMBEDDED:-0}
 
@@ -27,10 +35,10 @@ fi
 BUILD_DIR="build/tests"
 mkdir -p "$BUILD_DIR"
 
-TEST_LIST=$(mktemp)
-PYTHON_TEST_LIST=$(mktemp)
-BUILD_LOG=$(mktemp)
-RUN_LOG=$(mktemp)
+TEST_LIST=$(codelaxy_temp_file verify-cpp-tests)
+PYTHON_TEST_LIST=$(codelaxy_temp_file verify-python-tests)
+BUILD_LOG=$(codelaxy_temp_file verify-build)
+RUN_LOG=$(codelaxy_temp_file verify-run)
 
 if [ ! -f "$TEST_LIST" ] || [ ! -f "$PYTHON_TEST_LIST" ] ||
    [ ! -f "$BUILD_LOG" ] || [ ! -f "$RUN_LOG" ]; then
@@ -39,7 +47,10 @@ if [ ! -f "$TEST_LIST" ] || [ ! -f "$PYTHON_TEST_LIST" ] ||
     exit 1
 fi
 
-cleanup() { rm -f "$TEST_LIST" "$PYTHON_TEST_LIST" "$BUILD_LOG" "$RUN_LOG"; }
+cleanup() {
+    rm -f "$TEST_LIST" "$PYTHON_TEST_LIST" "$BUILD_LOG" "$RUN_LOG"
+    codelaxy_runtime_cleanup
+}
 trap cleanup 0
 
 find tests -type f -name '*_test.cpp' -print | sort > "$TEST_LIST"
@@ -65,7 +76,11 @@ do
     : > "$BUILD_LOG"
     : > "$RUN_LOG"
 
-    if ! g++ -std=c++20 -Wall -Wextra -Wpedantic "$TEST_FILE" $PROJECT_SOURCES -I. -o "$EXECUTABLE" > "$BUILD_LOG" 2>&1; then
+    if ! codelaxy_native_exec \
+        g++ -std=c++20 -Wall -Wextra -Wpedantic \
+        "$TEST_FILE" $PROJECT_SOURCES -I. -o "$EXECUTABLE" \
+        > "$BUILD_LOG" 2>&1
+    then
         ui_fail "$TEST_NAME · build failed"
         if [ -s "$BUILD_LOG" ]; then
             printf '\n'
@@ -76,7 +91,8 @@ do
         exit 1
     fi
 
-    if ! "$EXECUTABLE" > "$RUN_LOG" 2>&1; then
+    if ! codelaxy_native_exec "$EXECUTABLE" > "$RUN_LOG" 2>&1
+    then
         ui_fail "$TEST_NAME · test failed"
         if [ -s "$RUN_LOG" ]; then
             printf '\n'
@@ -117,7 +133,9 @@ if [ -s "$PYTHON_TEST_LIST" ]; then
 
         if ! PYTHONDONTWRITEBYTECODE=1 \
             PYTHONPATH="$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}" \
-            "$PYTHON" "$PYTHON_TEST_FILE" > "$RUN_LOG" 2>&1; then
+            codelaxy_native_exec \
+            "$PYTHON" "$PYTHON_TEST_FILE" > "$RUN_LOG" 2>&1
+        then
             ui_fail "$PYTHON_TEST_NAME · test failed"
             if [ -s "$RUN_LOG" ]; then
                 printf '\n'

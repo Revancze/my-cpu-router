@@ -2,17 +2,42 @@
 
 set -u
 
-SCRIPT_DIR=$(
-    CDPATH= cd -- "$(dirname -- "$0")" &&
-    pwd
-)
-
 TOOL=${0##*/}
-TARGET="$SCRIPT_DIR/../$TOOL.sh"
+TOOL=${TOOL%.exe}
+
+case "$TOOL" in
+    statusman|mrproper|ironman|doorman) ;;
+    *)
+        printf 'CODELAXY ERROR: unknown launcher name: %s\n' "$TOOL" >&2
+        exit 1
+        ;;
+esac
+
+if ! command -v git >/dev/null 2>&1
+then
+    printf 'CODELAXY ERROR: Git was not found in PATH.\n' >&2
+    exit 1
+fi
+
+ROOT_DIR=$(git rev-parse --show-toplevel 2>/dev/null || true)
+
+if [ -z "$ROOT_DIR" ]
+then
+    printf 'CODELAXY ERROR: not inside a Git worktree.\n' >&2
+    exit 1
+fi
+
+if command -v cygpath >/dev/null 2>&1
+then
+    ROOT_DIR=$(cygpath -u "$ROOT_DIR") || exit 1
+fi
+
+TARGET="$ROOT_DIR/tools/$TOOL.sh"
 
 if [ ! -f "$TARGET" ]
 then
-    printf 'CODELAXY ERROR: tools/%s.sh was not found.\n' "$TOOL"
+    printf 'CODELAXY ERROR: %s does not provide tools/%s.sh.\n' \
+        "$ROOT_DIR" "$TOOL" >&2
     exit 1
 fi
 

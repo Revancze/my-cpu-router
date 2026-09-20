@@ -15,17 +15,29 @@ else
     ui_fail() { printf '[FAIL] %s\n' "$1"; }
 fi
 
+. "$ROOT_DIR/tools/lib/runtime.sh"
+
+if ! codelaxy_runtime_init; then
+    ui_fail "Could not initialize Codelaxy runtime."
+    exit 1
+fi
+
+trap codelaxy_runtime_cleanup 0
+
 if ! command -v clang-format >/dev/null 2>&1; then
     ui_fail "clang-format was not found in PATH."
     exit 1
 fi
 
-FILE_LIST=$(mktemp)
+FILE_LIST=$(codelaxy_temp_file format-check-files)
 if [ ! -f "$FILE_LIST" ]; then
     ui_fail "Could not create temporary file list."
     exit 1
 fi
-cleanup() { rm -f "$FILE_LIST"; }
+cleanup() {
+    rm -f "$FILE_LIST"
+    codelaxy_runtime_cleanup
+}
 trap cleanup 0
 
 if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
@@ -41,14 +53,16 @@ while IFS= read -r -d '' FILE
 do
     [ -f "$FILE" ] || continue
     SCANNED=$((SCANNED + 1))
-    FORMATTED=$(mktemp)
+    FORMATTED=$(codelaxy_temp_file format-check-output)
 
     if [ ! -f "$FORMATTED" ]; then
         ui_fail "Could not create temporary formatted file."
         exit 1
     fi
 
-    if ! clang-format --style=file "$FILE" > "$FORMATTED"; then
+    if ! codelaxy_native_exec \
+        clang-format --style=file "$FILE" > "$FORMATTED"
+    then
         rm -f "$FORMATTED"
         ui_fail "clang-format failed: $FILE"
         exit 1
