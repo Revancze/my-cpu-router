@@ -360,23 +360,30 @@ and the generated route geometry.
 
 # R3 — Spatial object index
 
-Status: IN PROGRESS
+Status: DONE
 
-Implemented foundation:
+Implemented:
 
 - stable opaque object IDs,
 - RegionBounds records,
 - insert / remove / find operations,
 - inside and intersection queries,
 - half-open bounds semantics,
+- spatial object kinds,
+- optional net ownership,
+- object-kind filtering,
+- nearest-object lookup using Manhattan distance,
+- deterministic nearest-object tie breaking,
+- net occupancy queries,
+- layer occupancy queries,
+- local routing congestion reports,
 - optional SpatialHierarchy acceleration,
 - deepest containing-region storage,
 - parent-region storage for cross-boundary objects,
-- hierarchy-pruned candidate queries.
+- hierarchy-pruned candidate queries,
+- best-first hierarchy traversal for nearest-object lookup.
 
-The hierarchy must eventually index objects occupying routing space.
-
-Candidate indexed objects:
+Indexed object kinds include:
 
 ```text
 pins
@@ -388,25 +395,34 @@ keep-out regions
 routing corridors
 ```
 
-The index must remain reconstructible from persistent model data.
+The spatial index is an acceleration structure.
 
-It must never become the authoritative storage for the design.
+It remains reconstructible from persistent model data and is not the
+authoritative storage for the design.
 
-Queries should eventually support:
+Supported queries include:
 
 ```text
 objects inside region
 objects intersecting region
-nearest obstacle
+objects filtered by kind
+nearest object by kind
 net occupancy
 layer occupancy
 routing congestion
 ```
 
+Hierarchy-backed regional queries avoid scanning all indexed project objects.
+
+Indexes without a SpatialHierarchy retain a linear fallback for correctness
+and simple standalone use.
+
 Exit condition:
 
 Local routing can discover relevant nearby objects without scanning all project
 objects.
+
+Status: SATISFIED
 
 ---
 
