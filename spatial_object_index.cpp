@@ -392,6 +392,55 @@ std::vector<std::string> SpatialObjectIndex::queryLayerOccupancy(
     return queryIntersecting(layerBounds);
 }
 
+SpatialCongestion SpatialObjectIndex::queryCongestion(
+    RegionBounds bounds) const
+{
+    SpatialCongestion congestion;
+
+    const std::vector<std::string> candidates = queryIntersecting(bounds);
+
+    for (const std::string& id : candidates)
+    {
+        const SpatialObjectRecord* record = find(id);
+
+        if (record == nullptr)
+            continue;
+
+        switch (record->kind)
+        {
+        case SpatialObjectKind::Pin:
+            ++congestion.pins;
+            break;
+
+        case SpatialObjectKind::WireSegment:
+            ++congestion.wireSegments;
+            break;
+
+        case SpatialObjectKind::Via:
+            ++congestion.vias;
+            break;
+
+        case SpatialObjectKind::ComponentBody:
+            ++congestion.componentBodies;
+            break;
+
+        case SpatialObjectKind::Obstacle:
+            ++congestion.obstacles;
+            break;
+
+        case SpatialObjectKind::KeepOut:
+            ++congestion.keepOuts;
+            break;
+
+        case SpatialObjectKind::Unknown:
+        case SpatialObjectKind::RoutingCorridor:
+            break;
+        }
+    }
+
+    return congestion;
+}
+
 const SpatialObjectRecord* SpatialObjectIndex::findNearest(
     Point point,
     SpatialObjectKind kind) const
