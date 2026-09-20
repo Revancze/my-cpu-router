@@ -24,6 +24,22 @@ enum class SpatialObjectKind
     RoutingCorridor
 };
 
+struct SpatialCongestion
+{
+    std::size_t pins{};
+    std::size_t wireSegments{};
+    std::size_t vias{};
+    std::size_t componentBodies{};
+    std::size_t obstacles{};
+    std::size_t keepOuts{};
+
+    std::size_t total() const
+    {
+        return pins + wireSegments + vias + componentBodies + obstacles +
+               keepOuts;
+    }
+};
+
 struct SpatialObjectRecord
 {
     std::string id;
@@ -36,6 +52,7 @@ class SpatialObjectIndex
 {
   public:
     SpatialObjectIndex() = default;
+
 
     explicit SpatialObjectIndex(SpatialHierarchy& hierarchy);
 
@@ -62,6 +79,7 @@ class SpatialObjectIndex
 
     std::vector<std::string> queryLayerOccupancy(RegionBounds bounds,
                                                  int layer) const;
+    SpatialCongestion queryCongestion(RegionBounds bounds) const;
 
     const SpatialObjectRecord* findNearest(Point point,
                                            SpatialObjectKind kind) const;

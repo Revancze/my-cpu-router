@@ -450,6 +450,65 @@ int main()
 
     assert(!containsId(layer1, "wire:L0"));
 
+    // --------------------------------------------------------
+    // ROUTING CONGESTION
+    // --------------------------------------------------------
+
+    SpatialObjectIndex congestionIndex;
+
+    assert(congestionIndex.insert("pin:A",
+                                  RegionBounds{1, 1, 0, 2, 2, 1},
+                                  SpatialObjectKind::Pin));
+
+    assert(congestionIndex.insert("wire:A:0",
+                                  RegionBounds{2, 1, 0, 5, 2, 1},
+                                  SpatialObjectKind::WireSegment));
+
+    assert(congestionIndex.insert("wire:B:0",
+                                  RegionBounds{3, 3, 0, 6, 4, 1},
+                                  SpatialObjectKind::WireSegment));
+
+    assert(congestionIndex.insert("via:A",
+                                  RegionBounds{4, 1, 0, 5, 2, 2},
+                                  SpatialObjectKind::Via));
+
+    assert(congestionIndex.insert("component:U1",
+                                  RegionBounds{6, 1, 0, 8, 3, 1},
+                                  SpatialObjectKind::ComponentBody));
+
+    assert(congestionIndex.insert("obstacle:BLOCK",
+                                  RegionBounds{1, 5, 0, 3, 7, 1},
+                                  SpatialObjectKind::Obstacle));
+
+    assert(congestionIndex.insert("keepout:K1",
+                                  RegionBounds{5, 5, 0, 7, 7, 1},
+                                  SpatialObjectKind::KeepOut));
+
+    // Routing corridors describe routing policy, not occupied space.
+    assert(congestionIndex.insert("corridor:C1",
+                                  RegionBounds{0, 0, 0, 10, 10, 1},
+                                  SpatialObjectKind::RoutingCorridor));
+
+    // Unknown objects must not be silently classified as congestion.
+    assert(congestionIndex.insert("unknown:X", RegionBounds{2, 2, 0, 3, 3, 1}));
+
+    // Relevant kind, but outside the queried region.
+    assert(congestionIndex.insert("wire:OUTSIDE",
+                                  RegionBounds{20, 20, 0, 22, 21, 1},
+                                  SpatialObjectKind::WireSegment));
+
+    const SpatialCongestion congestion =
+        congestionIndex.queryCongestion(RegionBounds{0, 0, 0, 10, 10, 2});
+
+    assert(congestion.pins == 1);
+    assert(congestion.wireSegments == 2);
+    assert(congestion.vias == 1);
+    assert(congestion.componentBodies == 1);
+    assert(congestion.obstacles == 1);
+    assert(congestion.keepOuts == 1);
+
+    assert(congestion.total() == 7);
+
     std::cout << "spatial_object_index test: PASS\n";
 
     return 0;
