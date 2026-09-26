@@ -57,7 +57,7 @@ class Router
 
     void commitPath(const Path& path);
 
-    void commitPath(const Path& path, const NetId& netId);
+    bool commitPath(const Path& path, const NetId& netId);
 
     bool isInside(Point p) const;
     bool isObstacle(Point p) const;

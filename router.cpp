@@ -166,10 +166,26 @@ void Router::commitPath(
     }
 }
 
-void Router::commitPath(
+bool Router::commitPath(
     const Path& path,
     const NetId& netId)
 {
+    // Preflight: celá cesta musí být bezpečná ještě před první změnou.
+    for (const Point p : path.points)
+    {
+        if (!isInside(p))
+            continue;
+
+        const WireCell& wire = wires_[p.z][p.y][p.x];
+
+        if (!wire.occupied)
+            continue;
+
+        if (!wire.owner.has_value() || wire.owner.value() != netId)
+            return false;
+    }
+
+    // Commit proběhne až po úspěšném preflightu celé cesty.
     for (const Point p : path.points)
     {
         if (!isInside(p))
@@ -180,6 +196,8 @@ void Router::commitPath(
         wire.occupied = true;
         wire.owner = netId;
     }
+
+    return true;
 }
 
 Path Router::findPath(
