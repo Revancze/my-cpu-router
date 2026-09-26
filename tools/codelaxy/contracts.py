@@ -6,10 +6,14 @@ from dataclasses import dataclass
 from typing import ClassVar, Mapping
 
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
+
 VALID_SCOPES = frozenset({"staged", "worktree"})
 VALID_PRODUCERS = frozenset({"ironman", "mrproper"})
-VALID_RECEIPT_STATUSES = frozenset({"fail", "pass"})
+VALID_EVIDENCE_STATUSES = frozenset({"fail", "pass"})
+VALID_REQUIREMENT_KINDS = frozenset(
+    {"format", "lint", "build", "test", "custom"}
+)
 VALID_CHANGE_KINDS = frozenset(
     {"copy", "ordinary", "rename", "unmerged", "untracked"}
 )
@@ -264,41 +268,41 @@ class Snapshot:
             changes=_decoded_changes("changes", values["changes"]),
         )
 
-
 @dataclass(frozen=True, slots=True)
-class Plan:
-    """Required work for one exact snapshot."""
+class Requirement:
+    """Proof required for one exact snapshot."""
 
-    RECORD_TYPE: ClassVar[str] = "plan"
+    RECORD_TYPE: ClassVar[str] = "requirement"
 
     snapshot_id: str
-    cleanup_files: tuple[str, ...]
-    build_targets: tuple[str, ...]
-    tests: tuple[str, ...]
-    fallback_reason: str | None = None
+    requirement_id: str
+    kind: str
     schema_version: int = SCHEMA_VERSION
 
     def __post_init__(self) -> None:
         _schema_version(self.schema_version)
         _require_text("snapshot_id", self.snapshot_id)
-        _text_tuple("cleanup_files", self.cleanup_files)
-        _text_tuple("build_targets", self.build_targets)
-        _text_tuple("tests", self.tests)
-        _optional_text("fallback_reason", self.fallback_reason)
+        _require_text("requirement_id", self.requirement_id)
+
+        if self.kind not in VALID_REQUIREMENT_KINDS:
+            raise ContractError(
+                f"invalid requirement kind: {self.kind!r}"
+            )
 
     def to_dict(self) -> dict[str, object]:
         return {
             "record_type": self.RECORD_TYPE,
             "schema_version": self.schema_version,
             "snapshot_id": self.snapshot_id,
-            "cleanup_files": list(self.cleanup_files),
-            "build_targets": list(self.build_targets),
-            "tests": list(self.tests),
-            "fallback_reason": self.fallback_reason,
+            "requirement_id": self.requirement_id,
+            "kind": self.kind,
         }
 
     @classmethod
-    def from_dict(cls, payload: Mapping[str, object]) -> Plan:
+    def from_dict(
+        cls,
+        payload: Mapping[str, object],
+    ) -> Requirement:
         values = _record_payload(
             payload,
             cls.RECORD_TYPE,
@@ -307,34 +311,30 @@ class Plan:
                     "record_type",
                     "schema_version",
                     "snapshot_id",
-                    "cleanup_files",
-                    "build_targets",
-                    "tests",
-                    "fallback_reason",
+                    "requirement_id",
+                    "kind",
                 }
             ),
         )
+
         return cls(
             schema_version=_schema_version(values["schema_version"]),
-            snapshot_id=_require_text("snapshot_id", values["snapshot_id"]),
-            cleanup_files=_decoded_text_tuple(
-                "cleanup_files", values["cleanup_files"]
+            snapshot_id=_require_text(
+                "snapshot_id",
+                values["snapshot_id"],
             ),
-            build_targets=_decoded_text_tuple(
-                "build_targets", values["build_targets"]
+            requirement_id=_require_text(
+                "requirement_id",
+                values["requirement_id"],
             ),
-            tests=_decoded_text_tuple("tests", values["tests"]),
-            fallback_reason=_optional_text(
-                "fallback_reason", values["fallback_reason"]
-            ),
+            kind=_require_text("kind", values["kind"]),
         )
 
-
 @dataclass(frozen=True, slots=True)
-class Receipt:
+class Evidence:
     """Evidence published by the tool that performed work."""
 
-    RECORD_TYPE: ClassVar[str] = "receipt"
+    RECORD_TYPE: ClassVar[str] = "evidence"
 
     snapshot_id: str
     producer: str
@@ -350,9 +350,9 @@ class Receipt:
         _schema_version(self.schema_version)
         _require_text("snapshot_id", self.snapshot_id)
         if self.producer not in VALID_PRODUCERS:
-            raise ContractError(f"invalid receipt producer: {self.producer!r}")
-        if self.status not in VALID_RECEIPT_STATUSES:
-            raise ContractError(f"invalid receipt status: {self.status!r}")
+            raise ContractError(f"invalid evidence producer: {self.producer!r}")
+        if self.status not in VALID_EVIDENCE_STATUSES:
+            raise ContractError(f"invalid evidence status: {self.status!r}")
         _fingerprint("input_fingerprint", self.input_fingerprint)
         _text_tuple("executed", self.executed)
         _text_tuple("reused", self.reused)
@@ -374,7 +374,7 @@ class Receipt:
         }
 
     @classmethod
-    def from_dict(cls, payload: Mapping[str, object]) -> Receipt:
+    def from_dict(cls, payload: Mapping[str, object]) -> Evidence:
         values = _record_payload(
             payload,
             cls.RECORD_TYPE,
@@ -417,18 +417,23 @@ class Verdict:
     snapshot_id: str
     ready: bool
     reasons: tuple[str, ...]
-    required_receipts: tuple[str, ...]
+    required_evidence: tuple[str, ...]
     schema_version: int = SCHEMA_VERSION
 
     def __post_init__(self) -> None:
         _schema_version(self.schema_version)
         _require_text("snapshot_id", self.snapshot_id)
+
         if not isinstance(self.ready, bool):
             raise ContractError("ready must be a boolean")
+
         _text_tuple("reasons", self.reasons)
-        _text_tuple("required_receipts", self.required_receipts)
+        _text_tuple("required_evidence", self.required_evidence)
+
         if self.ready and self.reasons:
-            raise ContractError("a ready verdict must not contain blocking reasons")
+            raise ContractError(
+                "a ready verdict must not contain blocking reasons"
+            )
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -437,11 +442,14 @@ class Verdict:
             "snapshot_id": self.snapshot_id,
             "ready": self.ready,
             "reasons": list(self.reasons),
-            "required_receipts": list(self.required_receipts),
+            "required_evidence": list(self.required_evidence),
         }
 
     @classmethod
-    def from_dict(cls, payload: Mapping[str, object]) -> Verdict:
+    def from_dict(
+        cls,
+        payload: Mapping[str, object],
+    ) -> Verdict:
         values = _record_payload(
             payload,
             cls.RECORD_TYPE,
@@ -452,19 +460,28 @@ class Verdict:
                     "snapshot_id",
                     "ready",
                     "reasons",
-                    "required_receipts",
+                    "required_evidence",
                 }
             ),
         )
+
         ready = values["ready"]
         if not isinstance(ready, bool):
             raise ContractError("ready must be a boolean")
+
         return cls(
             schema_version=_schema_version(values["schema_version"]),
-            snapshot_id=_require_text("snapshot_id", values["snapshot_id"]),
+            snapshot_id=_require_text(
+                "snapshot_id",
+                values["snapshot_id"],
+            ),
             ready=ready,
-            reasons=_decoded_text_tuple("reasons", values["reasons"]),
-            required_receipts=_decoded_text_tuple(
-                "required_receipts", values["required_receipts"]
+            reasons=_decoded_text_tuple(
+                "reasons",
+                values["reasons"],
+            ),
+            required_evidence=_decoded_text_tuple(
+                "required_evidence",
+                values["required_evidence"],
             ),
         )
