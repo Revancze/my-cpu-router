@@ -3,7 +3,7 @@
 set -u
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-SOURCE="$SCRIPT_DIR/bin/statusman"
+CANONICAL_LAUNCHER="$SCRIPT_DIR/bin/statusman"
 DESTINATION=${CODELAXY_BIN_DIR:-"$HOME/.local/bin"}
 
 if [ "$#" -gt 1 ]
@@ -17,7 +17,7 @@ then
     DESTINATION=$1
 fi
 
-if [ ! -f "$SOURCE" ]
+if [ ! -f "$CANONICAL_LAUNCHER" ]
 then
     printf 'CODELAXY ERROR: canonical launcher was not found.\n' >&2
     exit 1
@@ -30,7 +30,7 @@ do
     TARGET="$DESTINATION/$TOOL"
     TEMP_TARGET="$DESTINATION/.$TOOL.new.$$"
 
-    if ! cp "$SOURCE" "$TEMP_TARGET" ||
+    if ! cp "$CANONICAL_LAUNCHER" "$TEMP_TARGET" ||
        ! chmod +x "$TEMP_TARGET" ||
        ! mv -f "$TEMP_TARGET" "$TARGET"
     then

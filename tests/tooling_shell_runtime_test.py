@@ -369,6 +369,18 @@ class ToolingShellRuntimeTest(unittest.TestCase):
             text=True,
         )
 
+    def test_legacy_launchers_match_canonical_launcher(self) -> None:
+        canonical = (
+            ROOT / "tools" / "bin" / "statusman"
+        ).read_bytes()
+
+        for launcher in LAUNCHERS:
+            with self.subTest(launcher=launcher.name):
+                self.assertEqual(
+                    launcher.read_bytes(),
+                    canonical,
+                )
+
 
 if __name__ == "__main__":
     unittest.main()
