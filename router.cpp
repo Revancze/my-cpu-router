@@ -158,7 +158,7 @@ bool Router::commitPath(
     for (const Point p : path.points)
     {
         if (!isInside(p))
-            continue;
+            return false;
 
         if (isObstacle(p))
             return false;
@@ -192,7 +192,7 @@ bool Router::commitPath(
     for (const Point p : path.points)
     {
         if (!isInside(p))
-            continue;
+            return false;
 
         if (isObstacle(p))
             return false;
