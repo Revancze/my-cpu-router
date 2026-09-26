@@ -6,6 +6,7 @@
 #include <limits>
 #include <queue>
 #include <vector>
+#include <cstdlib>
 
 namespace
 {
@@ -151,9 +152,40 @@ void Router::addObstacle(
         obstacles_[p.z][p.y][p.x] = true;
 }
 
+bool Router::isStructurallyValidPath(
+    const Path& path) const
+{
+    if (path.points.empty())
+        return false;
+
+    for (std::size_t i = 0; i < path.points.size(); ++i)
+    {
+        const Point current = path.points[i];
+
+        if (!isInside(current))
+            return false;
+
+        if (i == 0)
+            continue;
+
+        const Point previous = path.points[i - 1];
+
+        const int dx = std::abs(current.x - previous.x);
+        const int dy = std::abs(current.y - previous.y);
+        const int dz = std::abs(current.z - previous.z);
+
+        if (dx + dy + dz != 1)
+            return false;
+    }
+
+    return true;
+}
+
 bool Router::commitPath(
     const Path& path)
 {
+    if (!isStructurallyValidPath(path))
+        return false;
     // Preflight: anonymous commit must not overwrite owned wire.
     for (const Point p : path.points)
     {
@@ -188,6 +220,8 @@ bool Router::commitPath(
     const Path& path,
     const NetId& netId)
 {
+    if (!isStructurallyValidPath(path))
+        return false;
     // Preflight: celá cesta musí být bezpečná ještě před první změnou.
     for (const Point p : path.points)
     {

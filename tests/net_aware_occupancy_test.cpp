@@ -218,6 +218,54 @@ int main()
     assert(!anonymousBoundsRouter.isWire(Point{1, 0, 0}));
     assert(!anonymousBoundsRouter.isWire(Point{2, 0, 0}));
 
+    // --------------------------------------------------------
+    // COMMIT MUST REJECT STRUCTURALLY INVALID PATHS
+    // --------------------------------------------------------
+
+    Router structuralRouter(5, 2, 1);
+
+    Path emptyPath;
+
+    assert(!structuralRouter.commitPath(emptyPath, netA));
+    assert(!structuralRouter.commitPath(emptyPath));
+
+    Path disconnectedPath;
+    disconnectedPath.points = {
+        Point{1, 0, 0},
+        Point{3, 0, 0},
+    };
+
+    assert(!structuralRouter.commitPath(disconnectedPath, netA));
+
+    assert(!structuralRouter.isWire(Point{1, 0, 0}));
+    assert(!structuralRouter.isWire(Point{3, 0, 0}));
+
+    assert(!structuralRouter.commitPath(disconnectedPath));
+
+    assert(!structuralRouter.isWire(Point{1, 0, 0}));
+    assert(!structuralRouter.isWire(Point{3, 0, 0}));
+
+    Path diagonalPath;
+    diagonalPath.points = {
+        Point{0, 0, 0},
+        Point{1, 1, 0},
+    };
+
+    assert(!structuralRouter.commitPath(diagonalPath, netA));
+
+    assert(!structuralRouter.isWire(Point{0, 0, 0}));
+    assert(!structuralRouter.isWire(Point{1, 1, 0}));
+
+    Path repeatedPointPath;
+    repeatedPointPath.points = {
+        Point{2, 1, 0},
+        Point{2, 1, 0},
+    };
+
+    assert(!structuralRouter.commitPath(repeatedPointPath, netA));
+
+    assert(!structuralRouter.isWire(Point{2, 1, 0}));
+
     std::cout << "Owner: " << owner.value() << '\n';
     std::cout << "Same-net route length: " << sameNetPath.length() << '\n';
     std::cout << "Foreign-net route: blocked\n";
