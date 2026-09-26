@@ -243,6 +243,31 @@ int main()
     assert(negativePreferredPath.found());
     assert(negativePreferredPath.totalCost == 3);
 
+    // --------------------------------------------------------
+    // LAYER CHANGE BREAKS PLANAR TURN CONTINUITY
+    // --------------------------------------------------------
+
+    Router layerTurnRouter(2, 2, 2);
+
+    layerTurnRouter.addObstacle(Point{0, 1, 0});
+    layerTurnRouter.addObstacle(Point{0, 0, 1});
+    layerTurnRouter.addObstacle(Point{1, 1, 0});
+
+    const Path layerTurnPath =
+        layerTurnRouter.findPath(Point{0, 0, 0}, Point{1, 1, 1});
+
+    assert(layerTurnPath.found());
+    assert(layerTurnPath.length() == 3);
+    assert(layerTurnPath.layerChanges == 1);
+
+    // Forced route:
+    // (0,0,0) -> (1,0,0) -> (1,0,1) -> (1,1,1)
+    //
+    // The two planar moves are separated by a layer change.
+    // Search cost therefore does not apply a planar turn penalty,
+    // and the reported turn count must agree.
+    assert(layerTurnPath.totalCost == 6);
+    assert(layerTurnPath.turns == 0);
     std::cout << "routing_plan_router_integration test: PASS\n";
 
     return 0;
