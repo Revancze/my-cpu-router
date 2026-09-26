@@ -160,6 +160,9 @@ bool Router::commitPath(
         if (!isInside(p))
             continue;
 
+        if (isObstacle(p))
+            return false;
+
         const WireCell& wire = wires_[p.z][p.y][p.x];
 
         if (wire.occupied && wire.owner.has_value())
@@ -190,6 +193,9 @@ bool Router::commitPath(
     {
         if (!isInside(p))
             continue;
+
+        if (isObstacle(p))
+            return false;
 
         const WireCell& wire = wires_[p.z][p.y][p.x];
 
