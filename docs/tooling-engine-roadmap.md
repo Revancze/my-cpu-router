@@ -705,6 +705,30 @@ They must not be misread as permanent architectural obligations.
 
 ---
 
+## Architecture transition after P0
+
+The milestone material below remains the design source for the future Codelaxy
+engine, but the implementation boundary has changed.
+
+After the P0 contract and legacy-boundary cleanup is complete:
+
+1. the current Bash/Python implementation enters maintenance-only mode;
+2. Codelaxy moves to a standalone repository;
+3. the new implementation is built in C# / .NET;
+4. the public product boundary is the `codelaxy` executable;
+5. Git CLI remains authoritative for Git repository semantics;
+6. provider integration remains language-agnostic;
+7. the current contracts and verified behavior become migration fixtures and
+   compatibility references.
+
+The M1+ concepts in this document therefore describe required architecture and
+behavior, not a requirement to continue implementing those milestones inside
+the CPU Router repository.
+
+Before standalone development begins, P0 must end with an explicit audit that
+the product contract, compatibility boundary, tests, and legacy responsibilities
+are understood and stable.
+
 ## M0 — Contracts and characterization
 
 ### Goal
