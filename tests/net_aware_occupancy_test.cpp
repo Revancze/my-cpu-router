@@ -192,6 +192,32 @@ int main()
     assert(!anonymousObstacleRouter.isWire(Point{1, 0, 0}));
     assert(!anonymousObstacleRouter.isWire(Point{2, 0, 0}));
     assert(!anonymousObstacleRouter.isWire(Point{3, 0, 0}));
+
+    // --------------------------------------------------------
+    // COMMIT MUST REJECT OUT-OF-BOUNDS PATHS
+    // --------------------------------------------------------
+
+    Router boundsCommitRouter(4, 1, 1);
+
+    Path outOfBoundsPath;
+    outOfBoundsPath.points = {
+        Point{1, 0, 0},
+        Point{4, 0, 0},
+        Point{2, 0, 0},
+    };
+
+    assert(!boundsCommitRouter.commitPath(outOfBoundsPath, netA));
+
+    assert(!boundsCommitRouter.isWire(Point{1, 0, 0}));
+    assert(!boundsCommitRouter.isWire(Point{2, 0, 0}));
+
+    Router anonymousBoundsRouter(4, 1, 1);
+
+    assert(!anonymousBoundsRouter.commitPath(outOfBoundsPath));
+
+    assert(!anonymousBoundsRouter.isWire(Point{1, 0, 0}));
+    assert(!anonymousBoundsRouter.isWire(Point{2, 0, 0}));
+
     std::cout << "Owner: " << owner.value() << '\n';
     std::cout << "Same-net route length: " << sameNetPath.length() << '\n';
     std::cout << "Foreign-net route: blocked\n";
