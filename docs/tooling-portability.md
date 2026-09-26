@@ -78,8 +78,15 @@ tooling test modules automatically.
 ## Platform status
 
 - Linux: tooling regression tests verified in the isolated development copy.
-- Windows/MSYS2 plus native MinGW tools: architecture implemented; final status
-  requires the real Doorman, IronMan, and commit-hook run in that environment.
+- Windows/MSYS2 plus native MinGW tools: verified through the real commit-hook
+  path, including Doorman, staged snapshot isolation, IronMan, C++ tests, and
+  tooling regression tests.
 - Git for Windows, WSL, and macOS: design targets, not yet verified.
+
+This portability model belongs to the transitional Bash/Python implementation.
+
+The standalone post-P0 C# implementation must preserve the proven repository
+and runtime safety properties, but it is not required to preserve the current
+MSYS/Bash process architecture.
 
 No successful test on one platform is evidence for another platform.
