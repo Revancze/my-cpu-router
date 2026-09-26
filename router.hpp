@@ -80,6 +80,8 @@ class Router
                       const NetId* netId,
                       const RoutingPlan* plan) const;
 
+    bool isStructurallyValidPath(const Path& path) const;
+
     int width_;
     int height_;
     int layers_;
