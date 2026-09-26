@@ -326,6 +326,20 @@ class ToolingShellRuntimeTest(unittest.TestCase):
                 status_before,
             )
 
+    def test_mrproper_shell_delegates_cleanup_to_single_engine(self) -> None:
+        script = (ROOT / "tools" / "mrproper.sh").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn(
+            '"$PYTHON" "$ROOT_DIR/tools/mrproper.py"',
+            script,
+        )
+        self.assertNotIn(
+            "tools/format.sh",
+            script,
+        )
+
     def git_status(self, repository: Path) -> str:
         result = subprocess.run(
             [

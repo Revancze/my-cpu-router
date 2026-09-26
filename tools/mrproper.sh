@@ -14,13 +14,7 @@ fi
 
 trap codelaxy_runtime_cleanup 0
 
-ui_tool_header "MRPROPER" "WORKTREE CLEANUP" "format · whitespace · EOF" "$UI_CYAN" "$UI_GREEN"
-
-ui_section "FORMAT"
-if ! bash "$ROOT_DIR/tools/format.sh" --changed; then
-    ui_footer_fail "CLEANUP FAILED"
-    exit 1
-fi
+ui_tool_header "MRPROPER" "WORKTREE CLEANUP" "whitespace · EOF" "$UI_CYAN" "$UI_GREEN"
 
 if command -v python >/dev/null 2>&1; then
     PYTHON=python
