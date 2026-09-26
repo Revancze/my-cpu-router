@@ -161,6 +161,37 @@ int main()
     assert(anonymousAtomicRouter.wireOwner(Point{2, 0, 0}).has_value());
     assert(anonymousAtomicRouter.wireOwner(Point{2, 0, 0}).value() == netA);
     assert(!anonymousAtomicRouter.isWire(Point{3, 0, 0}));
+
+    // --------------------------------------------------------
+    // COMMIT MUST NOT CROSS AN OBSTACLE
+    // --------------------------------------------------------
+
+    Router obstacleCommitRouter(4, 1, 1);
+
+    obstacleCommitRouter.addObstacle(Point{2, 0, 0});
+
+    Path obstaclePath;
+    obstaclePath.points = {
+        Point{1, 0, 0},
+        Point{2, 0, 0},
+        Point{3, 0, 0},
+    };
+
+    assert(!obstacleCommitRouter.commitPath(obstaclePath, netA));
+
+    assert(!obstacleCommitRouter.isWire(Point{1, 0, 0}));
+    assert(!obstacleCommitRouter.isWire(Point{2, 0, 0}));
+    assert(!obstacleCommitRouter.isWire(Point{3, 0, 0}));
+
+    Router anonymousObstacleRouter(4, 1, 1);
+
+    anonymousObstacleRouter.addObstacle(Point{2, 0, 0});
+
+    assert(!anonymousObstacleRouter.commitPath(obstaclePath));
+
+    assert(!anonymousObstacleRouter.isWire(Point{1, 0, 0}));
+    assert(!anonymousObstacleRouter.isWire(Point{2, 0, 0}));
+    assert(!anonymousObstacleRouter.isWire(Point{3, 0, 0}));
     std::cout << "Owner: " << owner.value() << '\n';
     std::cout << "Same-net route length: " << sameNetPath.length() << '\n';
     std::cout << "Foreign-net route: blocked\n";
