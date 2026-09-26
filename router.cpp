@@ -151,9 +151,22 @@ void Router::addObstacle(
         obstacles_[p.z][p.y][p.x] = true;
 }
 
-void Router::commitPath(
+bool Router::commitPath(
     const Path& path)
 {
+    // Preflight: anonymous commit must not overwrite owned wire.
+    for (const Point p : path.points)
+    {
+        if (!isInside(p))
+            continue;
+
+        const WireCell& wire = wires_[p.z][p.y][p.x];
+
+        if (wire.occupied && wire.owner.has_value())
+            return false;
+    }
+
+    // Commit only after the entire path has passed preflight.
     for (const Point p : path.points)
     {
         if (!isInside(p))
@@ -164,6 +177,8 @@ void Router::commitPath(
         wire.occupied = true;
         wire.owner.reset();
     }
+
+    return true;
 }
 
 bool Router::commitPath(

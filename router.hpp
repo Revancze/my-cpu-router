@@ -55,7 +55,7 @@ class Router
 
     Path findPath(Point start, Point end, const NetId& netId) const;
 
-    void commitPath(const Path& path);
+    bool commitPath(const Path& path);
 
     bool commitPath(const Path& path, const NetId& netId);
 

@@ -114,6 +114,53 @@ int main()
     assert(atomicRouter.wireOwner(Point{2, 0, 0}).value() == netA);
     assert(!atomicRouter.isWire(Point{3, 0, 0}));
 
+    // --------------------------------------------------------
+    // ANONYMOUS COMMIT MUST NOT STEAL OWNED WIRE
+    // --------------------------------------------------------
+
+    Router anonymousOwnershipRouter(3, 1, 1);
+
+    Path ownedPath;
+    ownedPath.points = {
+        Point{1, 0, 0},
+    };
+
+    assert(anonymousOwnershipRouter.commitPath(ownedPath, netA));
+
+    assert(anonymousOwnershipRouter.wireOwner(Point{1, 0, 0}).has_value());
+    assert(anonymousOwnershipRouter.wireOwner(Point{1, 0, 0}).value() == netA);
+
+    Path anonymousOverwritePath;
+    anonymousOverwritePath.points = {
+        Point{1, 0, 0},
+    };
+
+    assert(!anonymousOwnershipRouter.commitPath(anonymousOverwritePath));
+
+    assert(anonymousOwnershipRouter.wireOwner(Point{1, 0, 0}).has_value());
+    assert(anonymousOwnershipRouter.wireOwner(Point{1, 0, 0}).value() == netA);
+    Router anonymousAtomicRouter(4, 1, 1);
+
+    Path ownedMiddle;
+    ownedMiddle.points = {
+        Point{2, 0, 0},
+    };
+
+    assert(anonymousAtomicRouter.commitPath(ownedMiddle, netA));
+
+    Path anonymousConflictingPath;
+    anonymousConflictingPath.points = {
+        Point{1, 0, 0},
+        Point{2, 0, 0},
+        Point{3, 0, 0},
+    };
+
+    assert(!anonymousAtomicRouter.commitPath(anonymousConflictingPath));
+
+    assert(!anonymousAtomicRouter.isWire(Point{1, 0, 0}));
+    assert(anonymousAtomicRouter.wireOwner(Point{2, 0, 0}).has_value());
+    assert(anonymousAtomicRouter.wireOwner(Point{2, 0, 0}).value() == netA);
+    assert(!anonymousAtomicRouter.isWire(Point{3, 0, 0}));
     std::cout << "Owner: " << owner.value() << '\n';
     std::cout << "Same-net route length: " << sameNetPath.length() << '\n';
     std::cout << "Foreign-net route: blocked\n";
