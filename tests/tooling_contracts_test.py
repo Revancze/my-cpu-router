@@ -13,8 +13,8 @@ from tools.codelaxy import (
     SCHEMA_VERSION,
     Change,
     ContractError,
-    Plan,
-    Receipt,
+    Evidence,
+    Requirement,
     Snapshot,
     Verdict,
     decode_record,
@@ -27,7 +27,9 @@ FINGERPRINT_B = "sha256:" + "b" * 64
 
 
 class ToolingContractsTest(unittest.TestCase):
-    def records(self) -> tuple[Snapshot, Plan, Receipt, Verdict]:
+    def records(
+        self,
+    ) -> tuple[Snapshot, Requirement, Evidence, Verdict]:
         return (
             Snapshot(
                 snapshot_id="snapshot-1",
@@ -50,18 +52,20 @@ class ToolingContractsTest(unittest.TestCase):
                     ),
                 ),
             ),
-            Plan(
+            Requirement(
                 snapshot_id="snapshot-1",
-                cleanup_files=(),
-                build_targets=("router.o", "router_test"),
-                tests=("router_test",),
+                requirement_id="cpu-router-tests",
+                kind="test",
             ),
-            Receipt(
+            Evidence(
                 snapshot_id="snapshot-1",
                 producer="ironman",
                 status="pass",
                 input_fingerprint=FINGERPRINT_B,
-                executed=("build:router.o", "test:router_test"),
+                executed=(
+                    "build:router.o",
+                    "test:router_test",
+                ),
                 reused=(),
                 started_at="2026-09-13T12:00:00Z",
                 finished_at="2026-09-13T12:00:02Z",
@@ -70,7 +74,7 @@ class ToolingContractsTest(unittest.TestCase):
                 snapshot_id="snapshot-1",
                 ready=True,
                 reasons=(),
-                required_receipts=("ironman",),
+                required_evidence=("ironman",),
             ),
         )
 
@@ -80,10 +84,14 @@ class ToolingContractsTest(unittest.TestCase):
                 serialized = encode_record(record)
                 self.assertTrue(serialized.endswith("\n"))
                 self.assertEqual(decode_record(serialized), record)
-                self.assertEqual(encode_record(decode_record(serialized)), serialized)
+                self.assertEqual(
+                    encode_record(decode_record(serialized)),
+                    serialized,
+                )
 
     def test_records_are_immutable(self) -> None:
         snapshot = self.records()[0]
+
         with self.assertRaises(dataclasses.FrozenInstanceError):
             snapshot.scope = "worktree"  # type: ignore[misc]
 
@@ -104,10 +112,15 @@ class ToolingContractsTest(unittest.TestCase):
                 ],
             )
 
-    def test_snapshot_exposes_changed_paths_without_losing_change_state(self) -> None:
+    def test_snapshot_exposes_changed_paths_without_losing_change_state(
+        self,
+    ) -> None:
         snapshot = self.records()[0]
 
-        self.assertEqual(snapshot.changed_files, ("router.cpp", "router.hpp"))
+        self.assertEqual(
+            snapshot.changed_files,
+            ("router.cpp", "router.hpp"),
+        )
         self.assertEqual(snapshot.changes[0].index_status, "M")
 
     def test_rename_requires_its_original_path(self) -> None:
@@ -120,7 +133,10 @@ class ToolingContractsTest(unittest.TestCase):
             )
 
     def test_untracked_change_requires_question_mark_status(self) -> None:
-        with self.assertRaisesRegex(ContractError, r"must use \?\? status"):
+        with self.assertRaisesRegex(
+            ContractError,
+            r"must use \?\? status",
+        ):
             Change(
                 path="new.txt",
                 kind="untracked",
@@ -130,26 +146,45 @@ class ToolingContractsTest(unittest.TestCase):
 
     def test_invalid_schema_version_is_rejected(self) -> None:
         payload = self.records()[0].to_dict()
-        for version in (1, 999):
+
+        for version in (1, 2, 999):
             with self.subTest(version=version):
                 payload["schema_version"] = version
+
                 with self.assertRaisesRegex(
-                    ContractError, "unsupported schema version"
+                    ContractError,
+                    "unsupported schema version",
                 ):
                     Snapshot.from_dict(payload)
 
-        self.assertEqual(SCHEMA_VERSION, 2)
+        self.assertEqual(SCHEMA_VERSION, 3)
 
     def test_unknown_fields_are_rejected(self) -> None:
         payload = self.records()[1].to_dict()
         payload["surprise"] = True
 
-        with self.assertRaisesRegex(ContractError, "unexpected"):
-            Plan.from_dict(payload)
+        with self.assertRaisesRegex(
+            ContractError,
+            "unexpected",
+        ):
+            Requirement.from_dict(payload)
+
+    def test_requirement_rejects_provider_execution_details(self) -> None:
+        payload = self.records()[1].to_dict()
+        payload["build_targets"] = ["router_test"]
+
+        with self.assertRaisesRegex(
+            ContractError,
+            "unexpected",
+        ):
+            Requirement.from_dict(payload)
 
     def test_invalid_fingerprint_is_rejected(self) -> None:
-        with self.assertRaisesRegex(ContractError, "sha256 fingerprint"):
-            Receipt(
+        with self.assertRaisesRegex(
+            ContractError,
+            "sha256 fingerprint",
+        ):
+            Evidence(
                 snapshot_id="snapshot-1",
                 producer="ironman",
                 status="pass",
@@ -159,17 +194,34 @@ class ToolingContractsTest(unittest.TestCase):
             )
 
     def test_ready_verdict_cannot_contain_blocking_reasons(self) -> None:
-        with self.assertRaisesRegex(ContractError, "blocking reasons"):
+        with self.assertRaisesRegex(
+            ContractError,
+            "blocking reasons",
+        ):
             Verdict(
                 snapshot_id="snapshot-1",
                 ready=True,
                 reasons=("tests missing",),
-                required_receipts=("ironman",),
+                required_evidence=("ironman",),
             )
 
     def test_unknown_record_type_is_rejected(self) -> None:
-        with self.assertRaisesRegex(ContractError, "unknown record type"):
+        with self.assertRaisesRegex(
+            ContractError,
+            "unknown record type",
+        ):
             decode_record('{"record_type":"telepath"}')
+
+    def test_legacy_record_types_are_rejected(self) -> None:
+        for record_type in ("plan", "receipt"):
+            with self.subTest(record_type=record_type):
+                with self.assertRaisesRegex(
+                    ContractError,
+                    "unknown record type",
+                ):
+                    decode_record(
+                        f'{{"record_type":"{record_type}"}}'
+                    )
 
 
 if __name__ == "__main__":

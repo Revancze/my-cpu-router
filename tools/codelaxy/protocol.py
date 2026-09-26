@@ -5,15 +5,21 @@ from __future__ import annotations
 import json
 from typing import Mapping, TypeAlias
 
-from .contracts import ContractError, Plan, Receipt, Snapshot, Verdict
+from .contracts import (
+    ContractError,
+    Evidence,
+    Requirement,
+    Snapshot,
+    Verdict,
+)
 
 
-Record: TypeAlias = Snapshot | Plan | Receipt | Verdict
+Record: TypeAlias = Snapshot | Requirement | Evidence | Verdict
 
 RECORD_TYPES = {
     Snapshot.RECORD_TYPE: Snapshot,
-    Plan.RECORD_TYPE: Plan,
-    Receipt.RECORD_TYPE: Receipt,
+    Requirement.RECORD_TYPE: Requirement,
+    Evidence.RECORD_TYPE: Evidence,
     Verdict.RECORD_TYPE: Verdict,
 }
 
