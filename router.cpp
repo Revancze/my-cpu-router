@@ -477,6 +477,7 @@ Path Router::findPathImpl(
         if (dz != 0)
         {
             ++result.layerChanges;
+            havePreviousPlanarDirection = false;
             continue;
         }
 
